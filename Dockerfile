@@ -32,6 +32,10 @@ RUN mkdir -p /tmp/moviepy && \
     chmod 777 /tmp && \
     chmod 777 /tmp/moviepy
     
+# Set environment variables (Replace with actual API keys)
+ENV PEXELS_KEY="aXA4IlmjYKdzM9R7JZX6l4SwVmxTsaJbMvp9l7jf7rE9VVbh5lbxvoKn"
+ENV OPENROUTER_API_KEY="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"
+
 ENV FLASK_ENV=production
 ENV TEMP=/tmp
 
