@@ -2,10 +2,12 @@ import os
 from openai import OpenAI
 import json
 
-
-def generate_script(topic, language="en"):
-    groq_api_key = os.environ.get("GROQ_API_KEY", "")
-
+# Client initialization outside the function
+def get_ai_client():
+    """Initialize and return the appropriate AI client and model name"""
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+    
     if groq_key and len(groq_key) > 30:
         from groq import Groq
         return Groq(api_key=groq_key), "mixtral-8x7b-32768"
@@ -13,9 +15,14 @@ def generate_script(topic, language="en"):
         return OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=openrouter_key
-        ), "google/gemini-2.0-flash-exp:free"  # Default to free model
+        ), "google/gemini-2.0-flash-exp:free"
     else:
         return OpenAI(api_key=os.getenv('OPENAI_KEY')), "gpt-4o"
+
+# Initialize client and model at module level
+client, model = get_ai_client()
+
+def generate_script(topic, language="en"):
 
     # English prompt
     en_prompt = """
@@ -91,13 +98,7 @@ def generate_script(topic, language="en"):
         ],
         **extra_params
     )
-    # response = client.chat.completions.create(  
-    #         model=model,
-    #         messages=[
-    #             {"role": "system", "content": prompt},
-    #             {"role": "user", "content": topic}
-    #         ]
-    #     )
+    
     content = response.choices[0].message.content
     try:
         script = json.loads(content)["script"]
