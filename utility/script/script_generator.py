@@ -4,14 +4,16 @@ import json
 
 groq_api_key = os.environ.get("GROQ_API_KEY", "")
 
-if len(groq_api_key) > 30:
+if groq_key and len(groq_key) > 30:
     from groq import Groq
-    model = "mixtral-8x7b-32768"
-    client = Groq(api_key=groq_api_key)
+    return Groq(api_key=groq_key), "mixtral-8x7b-32768"
+elif openrouter_key:
+    return OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=openrouter_key
+    ), "google/gemini-2.0-flash-exp:free"  # Default to free model
 else:
-    OPENAI_API_KEY = os.getenv('OPENAI_KEY')
-    model = "gpt-4o"
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    return OpenAI(api_key=os.getenv('OPENAI_KEY')), "gpt-4o"
 
 def generate_script(topic, language="en"):
     # English prompt
@@ -71,14 +73,30 @@ def generate_script(topic, language="en"):
     # Select prompt based on language
     prompt = en_prompt if language == "en" else ar_prompt
 
+    extra_params = {}
+    if model.startswith("google/"):  # OpenRouter-specific params
+        extra_params = {
+            "extra_headers": {
+                "HTTP-Referer": os.getenv("SITE_URL", "http://localhost"),
+                "X-Title": os.getenv("SITE_NAME", "Video Generator")
+            }
+        }
 
     response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": topic}
-            ]
-        )
+        model=model,
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": topic}
+        ],
+        **extra_params
+    )
+    # response = client.chat.completions.create(  
+    #         model=model,
+    #         messages=[
+    #             {"role": "system", "content": prompt},
+    #             {"role": "user", "content": topic}
+    #         ]
+    #     )
     content = response.choices[0].message.content
     try:
         script = json.loads(content)["script"]

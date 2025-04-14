@@ -26,10 +26,21 @@ docker rm -f $(docker ps -aq --filter "ancestor=video-generator")
 docker build --no-cache -t video-generator .
 
 
-docker run -d -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output --name video-generator video-generator
+docker run -d -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output -e OPENAI_KEY="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" -e PEXELS_KEY="aXA4IlmjYKdzM9R7JZX6l4SwVmxTsaJbMvp9l7jf7rE9VVbh5lbxvoKn" --name video-generator video-generator
 
-docker run -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output --name video-generator video-generator
+docker run -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output -e OPENAI_KEY="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" -e PEXELS_KEY="aXA4IlmjYKdzM9R7JZX6l4SwVmxTsaJbMvp9l7jf7rE9VVbh5lbxvoKn" --name video-generator video-generator
 
-curl -X POST -H "Content-Type: application/json" -d '{"topic":"humans living on another plants advanced cities"}' http://localhost:5050/generate
+curl -X POST -H "Content-Type: application/json" \
+-d '{
+    "topic": "humans living on another planet with advanced cities",
+    "language": "en",
+    "voice": "en-US-JennyNeural",
+    "font_size": 100,
+    "font_color": "white",
+    "font_family": "Arial"
+}' \
+http://localhost:5050/generate  # Note the correct port 5050 
 
-curl http://localhost:5050/status/a0983171-47f1-46ee-83e9-c629837d788d
+
+
+curl http://localhost:5050/status/4c410e96-e8b7-49b9-a685-0a8cc1c3540b
