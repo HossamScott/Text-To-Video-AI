@@ -27,7 +27,7 @@ docker build --no-cache -t video-generator .
 
 docker run -d -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output -e OPENROUTER_API_KEY="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" -e PEXELS_KEY="aXA4IlmjYKdzM9R7JZX6l4SwVmxTsaJbMvp9l7jf7rE9VVbh5lbxvoKn" --name video-generator video-generator
 
-docker run -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output -e OPENROUTER_API_KEY="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" -e PEXELS_KEY="aXA4IlmjYKdzM9R7JZX6l4SwVmxTsaJbMvp9l7jf7rE9VVbh5lbxvoKn" --name video-generator video-generator
+docker run -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output -e OPENAI_API_KEY="" --name video-generator video-generator
 
 curl -X POST -H "Content-Type: application/json" \
 -d '{

@@ -34,7 +34,7 @@ def generate_video_async(task_id, topic, language, voice, font_settings):
         timed_captions = generate_timed_captions(SAMPLE_FILE_NAME)
         
         tasks[task_id]['message'] = 'Captions created. Generating video search terms...'
-        search_terms = getVideoSearchQueriesTimed(response, timed_captions)
+        search_terms = getVideoSearchQueriesTimed(response, timed_captions, language)
         
         tasks[task_id]['message'] = 'Searching for background videos...'
         background_video_urls = generate_video_url(search_terms, VIDEO_SERVER) if search_terms else None
@@ -131,6 +131,6 @@ def get_status(task_id):
         response['error'] = task['error']
     
     return jsonify(response)
-    
+
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5050)

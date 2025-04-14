@@ -4,20 +4,15 @@ import json
 
 # Client initialization outside the function
 def get_ai_client():
-    """Initialize and return the appropriate AI client and model name"""
-    groq_key = os.environ.get("GROQ_API_KEY", "")
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+    """Initialize and return OpenRouter client"""
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+    if not openrouter_key:
+        raise ValueError("OPENROUTER_API_KEY environment variable is required")
     
-    if groq_key and len(groq_key) > 30:
-        from groq import Groq
-        return Groq(api_key=groq_key), "mixtral-8x7b-32768"
-    elif openrouter_key:
-        return OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=openrouter_key
-        ), "google/gemini-2.0-flash-exp:free"
-    else:
-        return OpenAI(api_key=os.getenv('OPENAI_KEY')), "gpt-4o"
+    return OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=openrouter_key
+    ), "google/gemini-2.0-flash-exp:free"  # Default model
 
 # Initialize client and model at module level
 client, model = get_ai_client()
