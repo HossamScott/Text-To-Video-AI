@@ -1,15 +1,27 @@
-sudo mkdir -p /home/administrator/Text-To-Video-AI/videos
-chmod 777 /home/administrator/Text-To-Video-AI/videos
+sudo mkdir /home/administrator/Text-To-Video-AI/videos
+sudo chmod 777 /home/administrator/Text-To-Video-AI/videos
 
-docker ps
+---------------------------CLEAN DOCKER 
+Remove Stopped Containers
+docker container prune
+
+Remove Dangling/Unused Images
+docker image prune -a
+
+Remove Build Cache
+docker builder prune
+
+Remove All Unused Objects (Complete Cleanup)
+docker system prune
+
+------------------------------- STOP AND REMOVE SPECIFIC IMAGE 
 # Stop all containers (gracefully)
 docker stop $(docker ps -aq --filter "ancestor=video-generator")
 
 # Force remove all containers from this image
 docker rm -f $(docker ps -aq --filter "ancestor=video-generator")
 
-# Optional: Remove the old image if needed
-docker rmi video-generator
+
 
 docker build --no-cache -t video-generator .
 
