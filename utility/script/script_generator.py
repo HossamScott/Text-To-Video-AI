@@ -2,20 +2,21 @@ import os
 from openai import OpenAI
 import json
 
-groq_api_key = os.environ.get("GROQ_API_KEY", "")
-
-if groq_key and len(groq_key) > 30:
-    from groq import Groq
-    return Groq(api_key=groq_key), "mixtral-8x7b-32768"
-elif openrouter_key:
-    return OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=openrouter_key
-    ), "google/gemini-2.0-flash-exp:free"  # Default to free model
-else:
-    return OpenAI(api_key=os.getenv('OPENAI_KEY')), "gpt-4o"
 
 def generate_script(topic, language="en"):
+    groq_api_key = os.environ.get("GROQ_API_KEY", "")
+
+    if groq_key and len(groq_key) > 30:
+        from groq import Groq
+        return Groq(api_key=groq_key), "mixtral-8x7b-32768"
+    elif openrouter_key:
+        return OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=openrouter_key
+        ), "google/gemini-2.0-flash-exp:free"  # Default to free model
+    else:
+        return OpenAI(api_key=os.getenv('OPENAI_KEY')), "gpt-4o"
+
     # English prompt
     en_prompt = """
         You are a seasoned content writer for a YouTube Shorts channel, specializing in facts videos. 
