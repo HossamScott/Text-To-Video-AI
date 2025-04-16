@@ -7,7 +7,8 @@ from utility.utils import log_response, LOG_TYPE_GPT
 
 # Initialize OpenRouter client
 def get_ai_client():
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+    #openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+    openrouter_key = "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"
     if not openrouter_key:
         raise ValueError("OPENROUTER_API_KEY environment variable is required")
     

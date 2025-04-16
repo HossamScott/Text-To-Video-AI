@@ -1,8 +1,8 @@
 import os 
 import requests
 from utility.utils import log_response,LOG_TYPE_PEXEL
-
-PEXELS_API_KEY = os.environ.get('PEXELS_KEY')
+# PEXELS_API_KEY = os.environ.get('PEXELS_KEY')
+PEXELS_API_KEY = "XA4IlmjYKdzM9R7JZX6l4SwVmxTsaJbMvp9l7jf7rE9VVbh5lbxvoKn"
 
 def search_videos(query_string, orientation_landscape=True):
    

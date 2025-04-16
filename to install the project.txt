@@ -25,9 +25,10 @@ docker rm -f $(docker ps -aq --filter "ancestor=video-generator")
 
 docker build --no-cache -t video-generator .
 
-docker run -d -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output -e OPENROUTER_API_KEY="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" -e PEXELS_KEY="aXA4IlmjYKdzM9R7JZX6l4SwVmxTsaJbMvp9l7jf7rE9VVbh5lbxvoKn" --name video-generator video-generator
 
-docker run -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output -e OPENAI_API_KEY="" --name video-generator video-generator
+docker run -d -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output --name video-generator video-generator
+
+docker run -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output --name video-generator video-generator
 
 curl -X POST -H "Content-Type: application/json" \
 -d '{
@@ -39,7 +40,5 @@ curl -X POST -H "Content-Type: application/json" \
     "font_family": "Arial"
 }' \
 http://localhost:5050/generate 
-
-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
-
-curl http://localhost:5050/status/4c410e96-e8b7-49b9-a685-0a8cc1c3540b
+{"task_id":"b8128291-852d-45a3-89ec-3bc4ef66e2e5"}
+curl http://localhost:5050/status/b8128291-852d-45a3-89ec-3bc4ef66e2e5
