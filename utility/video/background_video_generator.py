@@ -55,21 +55,26 @@ def getBestVideo(query_string, orientation_landscape=True, used_vids=[]):
     print("NO LINKS found for this round of search with query :", query_string)
     return None
 
-
-def generate_video_url(timed_video_searches,video_server):
-        timed_video_urls = []
-        if video_server == "pexel":
-            used_links = []
-            for (t1, t2), search_terms in timed_video_searches:
-                url = ""
-                for query in search_terms:
-                  
-                    url = getBestVideo(query, orientation_landscape=True, used_vids=used_links)
+def generate_video_url(timed_video_searches, video_server):
+    timed_video_urls = []
+    if video_server == "pexel":
+        used_links = []
+        for (t1, t2), search_terms in timed_video_searches:
+            url = None
+            # Ensure search_terms is iterable
+            if not isinstance(search_terms, (list, tuple)):
+                logger.error(f"Expected list of search terms, got: {type(search_terms)}")
+                search_terms = []
+                
+            for query in search_terms:
+                try:
+                    url = getBestVideo(str(query), orientation_landscape=True, used_vids=used_links)
                     if url:
-                        used_links.append(url.split('.hd')[0])
+                        used_links.append(str(url).split('.hd')[0])
                         break
-                timed_video_urls.append([[t1, t2], url])
-        elif video_server == "stable_diffusion":
-            timed_video_urls = get_images_for_video(timed_video_searches)
-
-        return timed_video_urls
+                except Exception as e:
+                    logger.error(f"Error processing query {query}: {str(e)}")
+                    continue
+                    
+            timed_video_urls.append([[t1, t2], str(url) if url else None])
+    return timed_video_urls

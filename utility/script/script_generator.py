@@ -86,7 +86,8 @@ def generate_script(topic, language="en"):
 
     # Prepare extra parameters if using OpenRouter
     extra_params = {}
-    if "openrouter.ai" in getattr(client, "base_url", ""):
+    base_url = str(getattr(client, "base_url", ""))
+    if "openrouter.ai" in base_url:
         extra_params = {
             "extra_headers": {
                 "HTTP-Referer": os.getenv("SITE_URL", "http://localhost"),
