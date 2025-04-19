@@ -4,7 +4,20 @@ import threading
 from threading import Lock
 import time
 import logging
-
+try:
+    from .utility.script.script_generator import generate_script
+    from .utility.audio.audio_generator import generate_audio
+    from .utility.captions.timed_captions_generator import generate_timed_captions
+    from .utility.video.background_video_generator import generate_video_url
+    from .utility.render.render_engine import get_output_media
+    from .utility.video.video_search_query_generator import getVideoSearchQueriesTimed, merge_empty_intervals
+except ImportError:
+    from utility.script.script_generator import generate_script
+    from utility.audio.audio_generator import generate_audio
+    from utility.captions.timed_captions_generator import generate_timed_captions
+    from utility.video.background_video_generator import generate_video_url
+    from utility.render.render_engine import get_output_media
+    from utility.video.video_search_query_generator import getVideoSearchQueriesTimed, merge_empty_intervals
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
