@@ -40,5 +40,9 @@ curl -X POST -H "Content-Type: application/json" \
     "font_family": "Arial"
 }' \
 http://localhost:5050/generate 
-{"task_id":"b8128291-852d-45a3-89ec-3bc4ef66e2e5"}
-curl http://localhost:5050/status/b8128291-852d-45a3-89ec-3bc4ef66e2e5
+
+{"task_id":"53e8bd38-4a8d-4e3e-bfb0-c08eab839e7a"}
+curl http://localhost:5050/status/53e8bd38-4a8d-4e3e-bfb0-c08eab839e7a
+
+curl http://localhost:5050/tasks
+curl -X POST http://localhost:5050/tasks/{task_id}/cancel

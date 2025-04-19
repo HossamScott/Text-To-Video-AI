@@ -1,25 +1,31 @@
 import os
 from openai import OpenAI
 import json
+from utility.retry_utils import retry_api_call, handle_common_errors
 
-# Client initialization outside the function
 def get_ai_client():
-    """Initialize and return OpenRouter client"""
-    # openrouter_key = os.environ.get("OPENROUTER_API_KEY")
-    openrouter_key = "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"
-    if not openrouter_key:
-        raise ValueError("OPENROUTER_API_KEY environment variable is required")
+    """Initialize and return AI client with OpenAI as default"""
+    # Try OpenAI first
+    openai_key = os.environ.get("OPENAI_API_KEY", "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")
+    if openai_key:
+        return OpenAI(api_key=openai_key), "gpt-4o"
     
-    return OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=openrouter_key
-    ), "google/gemini-2.0-flash-exp:free"  # Default model
+    # Fallback to OpenRouter
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+    if openrouter_key:
+        return OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=openrouter_key
+        ), "google/gemini-2.0-flash-exp:free"
+    
+    raise ValueError("Either OPENAI_API_KEY or OPENROUTER_API_KEY environment variable is required")
 
 # Initialize client and model at module level
 client, model = get_ai_client()
 
+@handle_common_errors
+@retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2)
 def generate_script(topic, language="en"):
-
     # English prompt
     en_prompt = """
         You are a seasoned content writer for a YouTube Shorts channel, specializing in facts videos. 
@@ -77,8 +83,9 @@ def generate_script(topic, language="en"):
     # Select prompt based on language
     prompt = en_prompt if language == "en" else ar_prompt
 
+    # Prepare extra parameters if using OpenRouter
     extra_params = {}
-    if model.startswith("google/"):  # OpenRouter-specific params
+    if "openrouter.ai" in getattr(client, "base_url", ""):
         extra_params = {
             "extra_headers": {
                 "HTTP-Referer": os.getenv("SITE_URL", "http://localhost"),
@@ -99,9 +106,10 @@ def generate_script(topic, language="en"):
     try:
         script = json.loads(content)["script"]
     except Exception as e:
+        # Fallback JSON extraction if direct parsing fails
         json_start_index = content.find('{')
         json_end_index = content.rfind('}')
-        print(content)
+        print(f"JSON parsing error, attempting fallback extraction. Original content: {content}")
         content = content[json_start_index:json_end_index+1]
         script = json.loads(content)["script"]
     return script

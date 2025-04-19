@@ -1,21 +1,33 @@
 import os
 from openai import OpenAI
+from groq import Groq
 import json
 import re
 from datetime import datetime
 from utility.utils import log_response, LOG_TYPE_GPT
+from utility.retry_utils import retry_api_call, handle_common_errors
 
-# Initialize OpenRouter client
+# Initialize AI client with OpenAI as default
 def get_ai_client():
-    #openrouter_key = os.environ.get("OPENROUTER_API_KEY")
-    openrouter_key = "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"
-    if not openrouter_key:
-        raise ValueError("OPENROUTER_API_KEY environment variable is required")
+    # Try OpenAI first (default)
+    openai_key = os.environ.get("OPENAI_API_KEY", "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")
+    if len(openai_key) > 30:
+        return OpenAI(api_key=openai_key), "gpt-4o"
     
-    return OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=openrouter_key
-    ), "google/gemini-2.0-flash-exp:free"  # Default model
+    # Try Groq next
+    groq_api_key = os.environ.get("GROQ_API_KEY", "")
+    if len(groq_api_key) > 30:
+        return Groq(api_key=groq_api_key), "mixtral-8x7b-32768"
+    
+    # Fallback to OpenRouter
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+    if len(openrouter_key) > 30:
+        return OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=openrouter_key
+        ), "google/gemini-2.0-flash-exp:free"
+    
+    raise ValueError("No valid API key found in environment variables")
 
 client, model = get_ai_client()
 
@@ -51,7 +63,7 @@ def getVideoSearchQueriesTimed(script, captions_timed, language="en"):
     try:
         out = [[[0, 0], ""]]
         while out[-1][0][1] != end:
-            content = call_OpenAI(script, captions_timed, language).replace("'", '"')
+            content = call_AI_api(script, captions_timed, language).replace("'", '"')
             try:
                 out = json.loads(content)
             except Exception as e:
@@ -62,22 +74,40 @@ def getVideoSearchQueriesTimed(script, captions_timed, language="en"):
         print("Error processing response:", e)
     return None
 
-def call_OpenAI(script, captions_timed, language="en"):
+@handle_common_errors
+@retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2)
+def call_AI_api(script, captions_timed, language="en"):
     user_content = f"""Script: {script}
 Timed Captions: {"".join(map(str, captions_timed))}"""
     
-    response = client.chat.completions.create(
-        model=model,
-        temperature=1,
-        messages=[
-            {"role": "system", "content": PROMPTS.get(language, PROMPTS["en"])},
-            {"role": "user", "content": user_content}
-        ],
-        extra_headers={
-            "HTTP-Referer": os.getenv("SITE_URL", "http://localhost"),
-            "X-Title": os.getenv("SITE_NAME", "Video Generator")
-        }
-    )
+    # Check if we're using Groq
+    if isinstance(client, Groq):
+        response = client.chat.completions.create(
+            model=model,
+            temperature=1,
+            messages=[
+                {"role": "system", "content": PROMPTS.get(language, PROMPTS["en"])},
+                {"role": "user", "content": user_content}
+            ]
+        )
+    else:
+        # For OpenAI/OpenRouter
+        extra_headers = {}
+        if "openrouter.ai" in getattr(client, "base_url", ""):
+            extra_headers = {
+                "HTTP-Referer": os.getenv("SITE_URL", "http://localhost"),
+                "X-Title": os.getenv("SITE_NAME", "Video Generator")
+            }
+        
+        response = client.chat.completions.create(
+            model=model,
+            temperature=1,
+            messages=[
+                {"role": "system", "content": PROMPTS.get(language, PROMPTS["en"])},
+                {"role": "user", "content": user_content}
+            ],
+            **({"extra_headers": extra_headers} if extra_headers else {})
+        )
     
     text = response.choices[0].message.content.strip()
     text = re.sub(r'\s+', ' ', text)

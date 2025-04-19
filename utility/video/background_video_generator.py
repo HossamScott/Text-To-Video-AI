@@ -1,9 +1,13 @@
 import os 
 import requests
 from utility.utils import log_response,LOG_TYPE_PEXEL
+from utility.retry_utils import retry_api_call, handle_common_errors
+
 # PEXELS_API_KEY = os.environ.get('PEXELS_KEY')
 PEXELS_API_KEY = "XA4IlmjYKdzM9R7JZX6l4SwVmxTsaJbMvp9l7jf7rE9VVbh5lbxvoKn"
 
+@handle_common_errors
+@retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2)
 def search_videos(query_string, orientation_landscape=True):
    
     url = "https://api.pexels.com/videos/search"
