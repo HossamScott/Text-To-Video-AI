@@ -4,20 +4,22 @@ import json
 from utility.retry_utils import retry_api_call, handle_common_errors
 
 def get_ai_client():    
-    openrouter_key = "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"
-    if len(openrouter_key) > 30:
-        return OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=openrouter_key
-        ), "google/gemini-2.0-flash-exp:free"
-
-    openai_key = "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"
-    if len(openai_key) > 30:
-        return OpenAI(api_key=openai_key), "gpt-4o"
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "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")
+    if not openrouter_key:
+        raise ValueError("OPENROUTER_API_KEY is required")
     
-    groq_api_key = os.environ.get("GROQ_API_KEY", "")
-    if len(groq_api_key) > 30:
-        return Groq(api_key=groq_api_key), "mixtral-8x7b-32768"
+    return OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=openrouter_key
+    ), "google/gemini-2.0-flash-exp:free"
+
+    # openai_key = "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"
+    # if len(openai_key) > 10:
+    #     return OpenAI(api_key=openai_key), "gpt-4o"
+    
+    # groq_api_key = os.environ.get("GROQ_API_KEY", "")
+    # if len(groq_api_key) > 10:
+    #     return Groq(api_key=groq_api_key), "mixtral-8x7b-32768"
     
     raise ValueError("No valid API key found in environment variables")
 
@@ -81,37 +83,32 @@ def generate_script(topic, language="en"):
         {"script": "هنا النص ..."}
         """
 
-    # Select prompt based on language
-    prompt = en_prompt if language == "en" else ar_prompt
-
-    # Prepare extra parameters if using OpenRouter
-    extra_params = {}
-    base_url = str(getattr(client, "base_url", ""))
-    if "openrouter.ai" in base_url:
-        extra_params = {
-            "extra_headers": {
+    try:
+        completion = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": en_prompt if language == "en" else ar_prompt},
+                {"role": "user", "content": topic}
+            ],
+            extra_headers={
                 "HTTP-Referer": os.getenv("SITE_URL", "http://localhost"),
                 "X-Title": os.getenv("SITE_NAME", "Video Generator")
             }
-        }
-
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": topic}
-        ],
-        **extra_params
-    )
-    
-    content = response.choices[0].message.content
-    try:
-        script = json.loads(content)["script"]
+        )
+        
+        content = completion.choices[0].message.content
+        
+        # Improved JSON parsing
+        try:
+            if isinstance(content, str):
+                script = json.loads(content)["script"]
+            else:
+                script = content["script"]  # In case response is already a dict
+            return script
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error(f"Failed to parse response: {content}")
+            raise ValueError("Failed to parse AI response")
+            
     except Exception as e:
-        # Fallback JSON extraction if direct parsing fails
-        json_start_index = content.find('{')
-        json_end_index = content.rfind('}')
-        print(f"JSON parsing error, attempting fallback extraction. Original content: {content}")
-        content = content[json_start_index:json_end_index+1]
-        script = json.loads(content)["script"]
-    return script
+        logger.error(f"API request failed: {str(e)}")
+        raise 
