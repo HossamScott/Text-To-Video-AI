@@ -1,32 +1,26 @@
 import os
-from openai import OpenAI
 import json
 from utility.retry_utils import retry_api_call, handle_common_errors
 import logging
 logger = logging.getLogger(__name__)
 
-def get_ai_client():    
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "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")
-    if not openrouter_key:
-        raise ValueError("OPENROUTER_API_KEY is required")
-    
-    return OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=openrouter_key
-    ), "deepseek/deepseek-chat-v3-0324:free"
+# Ollama configuration
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:12b")
 
-    # openai_key = "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"
-    # if len(openai_key) > 10:
-    #     return OpenAI(api_key=openai_key), "gpt-4o"
-    
-    # groq_api_key = os.environ.get("GROQ_API_KEY", "")
-    # if len(groq_api_key) > 10:
-    #     return Groq(api_key=groq_api_key), "mixtral-8x7b-32768"
-    
-    raise ValueError("No valid API key found in environment variables")
+def get_ai_client():
+    """Initialize and return Ollama client configuration"""
+    # Test Ollama connection
+    try:
+        response = requests.get(f"{OLLAMA_HOST}/api/tags")
+        response.raise_for_status()
+        return None, OLLAMA_MODEL  # We don't need a client object for Ollama
+    except Exception as e:
+        logger.error(f"Ollama connection failed: {str(e)}")
+        raise ValueError("Failed to connect to Ollama. Is it running?")
 
-# Initialize client and model at module level
-client, model = get_ai_client()
+# Initialize model
+_, model = get_ai_client()
 
 @handle_common_errors
 @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2)
@@ -86,37 +80,58 @@ def generate_script(topic, language="en"):
         """
 
     try:
-        completion = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": en_prompt if language == "en" else ar_prompt},
-                {"role": "user", "content": topic}
+        # Prepare the Ollama API request
+        payload = {
+            "model": model,
+            "messages": [
+                {
+                    "role": "system", 
+                    "content": en_prompt if language == "en" else ar_prompt
+                },
+                {
+                    "role": "user", 
+                    "content": topic
+                }
             ],
-            extra_headers={
-                "HTTP-Referer": os.getenv("SITE_URL", "http://localhost"),
-                "X-Title": os.getenv("SITE_NAME", "Video Generator")
-            }
+            "stream": False,
+            "format": "json"  # Request JSON response
+        }
+
+        response = requests.post(
+            f"{OLLAMA_HOST}/api/chat",
+            json=payload,
+            headers={"Content-Type": "application/json"}
         )
+        response.raise_for_status()
+
+        content = response.json()
+        message_content = content["message"]["content"]
         
-        content = completion.choices[0].message.content
-        
-        # Improved JSON parsing
+        # Handle the response
         try:
-            if "```json" in content:
-                # Extract JSON from between the markdown code blocks
-                json_str = content.split("```json")[1].split("```")[0].strip()
-                script = json.loads(json_str)["script"]
+            # Try direct JSON parse first
+            if isinstance(message_content, str):
+                script_data = json.loads(message_content)
             else:
-                # Handle direct JSON response
-                if isinstance(content, str):
-                    script = json.loads(content)["script"]
-                else:
-                    script = content["script"]
-            return script
-        except (json.JSONDecodeError, KeyError, IndexError) as e:
-            logger.error(f"Failed to parse response. Raw content: {content}")
-            raise ValueError("Failed to parse AI response. The response format may have changed.")
+                script_data = message_content
             
+            # Extract the script content
+            script = script_data["script"]
+            
+            # Ensure the script ends with proper punctuation
+            if not script[-1] in {'.', '!', '?'}:
+                script += '.'
+                
+            return script
+            
+        except (json.JSONDecodeError, KeyError, AttributeError) as e:
+            logger.error(f"Failed to parse response. Raw content: {message_content}")
+            # Fallback: return the raw content if JSON parsing fails
+            return message_content
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Ollama API request failed: {str(e)}")
+        raise ValueError("Failed to get response from Ollama")
     except Exception as e:
-        logger.error(f"API request failed: {str(e)}")
+        logger.error(f"Unexpected error: {str(e)}")
         raise

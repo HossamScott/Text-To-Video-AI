@@ -24,7 +24,7 @@ docker stop $(docker ps -aq --filter "ancestor=video-generator") && docker rm -f
 docker build --no-cache -t video-generator .
 
 
-docker run -d -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output -e OPENROUTER_API_KEY="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" --name video-generator video-generator
+docker run -d -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output --name video-generator video-generator
 
 docker run -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output --name video-generator video-generator
 
@@ -50,6 +50,6 @@ curl -X POST -H "Content-Type: application/json" \
 http://localhost:5050/generate 
 
 {"task_id":"53e8bd38-4a8d-4e3e-bfb0-c08eab839e7a"}
-curl http://localhost:5050/status/4851247e-e592-4152-b8a7-c6c1c68ea0d0
+curl http://localhost:5050/status/859b86aa-97e2-4354-bb45-ded4d96c8750
 curl http://localhost:5050/tasks
 curl -X POST http://localhost:5050/tasks/{task_id}/cancel

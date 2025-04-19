@@ -1,8 +1,7 @@
 import os
-from openai import OpenAI
-from groq import Groq
 import json
 import re
+import requests
 from datetime import datetime
 from utility.utils import log_response, LOG_TYPE_GPT
 from utility.retry_utils import retry_api_call, handle_common_errors
@@ -11,48 +10,23 @@ import logging
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# Ollama configuration
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:12b")
+
 def get_ai_client():
-    """Initialize and return the appropriate AI client with fallback support"""
-    # Try OpenRouter first
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "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")
-    if not openrouter_key:
-        raise ValueError("OPENROUTER_API_KEY is required")
-    if openrouter_key:
-        try:
-            client = OpenAI(
-                base_url="https://openrouter.ai/api/v1",
-                api_key=openrouter_key
-            )
-            # Test the connection
-            client.models.list()
-            return client, "deepseek/deepseek-chat-v3-0324:free"
-        except Exception as e:
-            logger.warning(f"OpenRouter connection failed: {str(e)}")
+    """Initialize and return Ollama configuration"""
+    try:
+        # Test Ollama connection
+        response = requests.get(f"{OLLAMA_HOST}/api/tags")
+        response.raise_for_status()
+        return None, OLLAMA_MODEL  # No client object needed for Ollama
+    except Exception as e:
+        logger.error(f"Ollama connection failed: {str(e)}")
+        raise ValueError("Failed to connect to Ollama. Is it running?")
 
-    # openai_key = os.environ.get("OPENAI_API_KEY")
-    # if openai_key:
-    #     try:
-    #         client = OpenAI(api_key=openai_key)
-    #         return client, "gpt-4o"
-    #     except Exception as e:
-    #         logger.warning(f"OpenAI connection failed: {str(e)}")
-
-    # groq_key = os.environ.get("GROQ_API_KEY")
-    # if groq_key:
-    #     try:
-    #         client = Groq(api_key=groq_key)
-    #         return client, "mixtral-8x7b-32768"
-    #     except Exception as e:
-    #         logger.warning(f"Groq connection failed: {str(e)}")
-
-    raise ValueError("No valid API provider configuration found. Please set environment variables.")
-
-# Initialize client and model
-try:
-    client, model = get_ai_client()
-except Exception as e:
-    logger.error(f"Failed to initialize AI client: {str(e)}")
-    raise
+# Initialize model
+_, model = get_ai_client()
 
 # Language-specific prompts
 PROMPTS = {
@@ -76,9 +50,10 @@ Important Guidelines:
 }
 
 def fix_json(json_str):
+    """Clean and fix common JSON formatting issues"""
     json_str = json_str.replace("'", '"')
-    json_str = json_str.replace("’", "'").replace("‘", "'")
-    json_str = json_str.replace("“", '"').replace("”", '"')
+    json_str = json_str.replace("'", "'").replace("'", "'")
+    json_str = json_str.replace(""", '"').replace(""", '"')
     return json_str
 
 def getVideoSearchQueriesTimed(script, captions_timed, language="en"):
@@ -94,33 +69,39 @@ def getVideoSearchQueriesTimed(script, captions_timed, language="en"):
                 out = json.loads(content)
         return out
     except Exception as e:
-        print("Error processing response:", e)
-    return None
+        logger.error(f"Error processing response: {str(e)}")
+        raise
+
 @handle_common_errors
 @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2)
 def call_AI_api(script, captions_timed, language="en"):
-    """Make API call to OpenRouter with proper headers and error handling"""
+    """Make API call to Ollama with proper error handling"""
     try:
         # Prepare the input content
-        user_content = f"""Script: {script}
-Timed Captions: {"".join(map(str, captions_timed))}"""
+        user_content = f"""Script: {script}\nTimed Captions: {json.dumps(captions_timed)}"""
         
-        # Make the API call
-        response = client.chat.completions.create(
-            model=model,
-            temperature=1,
-            messages=[
+        # Prepare the Ollama API request
+        payload = {
+            "model": model,
+            "messages": [
                 {"role": "system", "content": PROMPTS.get(language, PROMPTS["en"])},
                 {"role": "user", "content": user_content}
             ],
-            extra_headers={
-                "HTTP-Referer": os.getenv("SITE_URL", "http://localhost"),
-                "X-Title": os.getenv("SITE_NAME", "Video Generator")
-            }
+            "stream": False,
+            "format": "json"  # Request JSON response
+        }
+
+        # Make the API call
+        response = requests.post(
+            f"{OLLAMA_HOST}/api/chat",
+            json=payload,
+            headers={"Content-Type": "application/json"}
         )
-        
+        response.raise_for_status()
+
         # Process the response
-        text = response.choices[0].message.content.strip()
+        content = response.json()
+        text = content["message"]["content"].strip()
         text = re.sub(r'\s+', ' ', text)
         
         # Log the response
@@ -128,17 +109,22 @@ Timed Captions: {"".join(map(str, captions_timed))}"""
         
         # Parse the JSON response with error handling
         try:
-            if isinstance(text, str):
-                # Remove JSON code blocks if present
-                clean_text = text.replace("```json", "").replace("```", "").strip()
-                return json.loads(clean_text)
+            if "```json" in text:
+                # Extract JSON from markdown
+                json_str = text.split("```json")[1].split("```")[0].strip()
+                return json.loads(json_str)
+            elif isinstance(text, str):
+                return json.loads(text)
             return text  # if it's already a dict
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON response: {text}")
             raise ValueError("Invalid JSON response from AI API")
             
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Ollama API request failed: {str(e)}")
+        raise ValueError("Failed to communicate with Ollama API")
     except Exception as e:
-        logger.error(f"API request failed: {str(e)}")
+        logger.error(f"Unexpected error: {str(e)}")
         raise
 
 def merge_empty_intervals(segments):
