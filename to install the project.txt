@@ -16,10 +16,8 @@ docker system prune
 
 ------------------------------- STOP AND REMOVE SPECIFIC IMAGE 
 # Stop all containers (gracefully)
-docker stop $(docker ps -aq --filter "ancestor=video-generator")
-
 # Force remove all containers from this image
-docker rm -f $(docker ps -aq --filter "ancestor=video-generator")
+docker stop $(docker ps -aq --filter "ancestor=video-generator") && docker rm -f $(docker ps -aq --filter "ancestor=video-generator")
 
 
 
@@ -34,6 +32,16 @@ curl -X POST -H "Content-Type: application/json" \
 -d '{
     "topic": "humans living on another planet with advanced cities",
     "language": "en",
+    "font_size": 100,
+    "font_color": "white",
+    "font_family": "Arial"
+}' \
+https://techs-solutions.com/generate 
+
+curl -X POST -H "Content-Type: application/json" \
+-d '{
+    "topic": "humans living on another planet with advanced cities",
+    "language": "en",
     "voice": "en-US-JennyNeural",
     "font_size": 100,
     "font_color": "white",
@@ -42,7 +50,6 @@ curl -X POST -H "Content-Type: application/json" \
 http://localhost:5050/generate 
 
 {"task_id":"53e8bd38-4a8d-4e3e-bfb0-c08eab839e7a"}
-curl http://localhost:5050/status/53e8bd38-4a8d-4e3e-bfb0-c08eab839e7a
-
+curl http://localhost:5050/status/1afbc348-3761-450a-8568-945f28ef931f
 curl http://localhost:5050/tasks
 curl -X POST http://localhost:5050/tasks/{task_id}/cancel

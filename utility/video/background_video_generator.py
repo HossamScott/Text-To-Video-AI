@@ -2,6 +2,8 @@ import os
 import requests
 from utility.utils import log_response,LOG_TYPE_PEXEL
 from utility.retry_utils import retry_api_call, handle_common_errors
+import logging
+logger = logging.getLogger(__name__)
 
 # PEXELS_API_KEY = os.environ.get('PEXELS_KEY')
 PEXELS_API_KEY = "XA4IlmjYKdzM9R7JZX6l4SwVmxTsaJbMvp9l7jf7rE9VVbh5lbxvoKn"

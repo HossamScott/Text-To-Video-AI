@@ -2,6 +2,8 @@ import os
 from openai import OpenAI
 import json
 from utility.retry_utils import retry_api_call, handle_common_errors
+import logging
+logger = logging.getLogger(__name__)
 
 def get_ai_client():    
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "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")
