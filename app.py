@@ -3,6 +3,11 @@ import uuid
 import threading
 from threading import Lock
 import time
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -258,3 +263,10 @@ def get_status(task_id):
             response['message'] = 'Task was cancelled by user'
         
         return jsonify(response)
+
+if __name__ == "__main__":
+    try:
+        app.run(host='0.0.0.0', port=5050)
+    except Exception as e:
+        print(f"Failed to start server: {str(e)}")
+        raise

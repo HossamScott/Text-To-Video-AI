@@ -7,25 +7,21 @@ from datetime import datetime
 from utility.utils import log_response, LOG_TYPE_GPT
 from utility.retry_utils import retry_api_call, handle_common_errors
 
-# Initialize AI client with OpenAI as default
 def get_ai_client():
-    # Try OpenAI first (default)
-    openai_key = os.environ.get("OPENAI_API_KEY", "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")
-    if len(openai_key) > 30:
-        return OpenAI(api_key=openai_key), "gpt-4o"
-    
-    # Try Groq next
-    groq_api_key = os.environ.get("GROQ_API_KEY", "")
-    if len(groq_api_key) > 30:
-        return Groq(api_key=groq_api_key), "mixtral-8x7b-32768"
-    
-    # Fallback to OpenRouter
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+    openrouter_key = "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"
     if len(openrouter_key) > 30:
         return OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=openrouter_key
         ), "google/gemini-2.0-flash-exp:free"
+
+    openai_key = "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"
+    if len(openai_key) > 30:
+        return OpenAI(api_key=openai_key), "gpt-4o"
+    
+    groq_api_key = os.environ.get("GROQ_API_KEY", "")
+    if len(groq_api_key) > 30:
+        return Groq(api_key=groq_api_key), "mixtral-8x7b-32768"
     
     raise ValueError("No valid API key found in environment variables")
 
