@@ -2,6 +2,7 @@ import os
 import json
 from utility.retry_utils import retry_api_call, handle_common_errors
 import logging
+import requests
 logger = logging.getLogger(__name__)
 
 # Ollama configuration
