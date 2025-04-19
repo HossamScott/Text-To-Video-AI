@@ -6,14 +6,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 def get_ai_client():    
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "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")
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "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")
     if not openrouter_key:
         raise ValueError("OPENROUTER_API_KEY is required")
     
     return OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=openrouter_key
-    ), "google/gemini-2.0-flash-exp:free"
+    ), "deepseek/deepseek-chat-v3-0324:free"
 
     # openai_key = "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"
     # if len(openai_key) > 10:

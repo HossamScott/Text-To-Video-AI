@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 def get_ai_client():
     """Initialize and return the appropriate AI client with fallback support"""
     # Try OpenRouter first
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "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")
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "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")
     if not openrouter_key:
         raise ValueError("OPENROUTER_API_KEY is required")
     if openrouter_key:
@@ -25,7 +25,7 @@ def get_ai_client():
             )
             # Test the connection
             client.models.list()
-            return client, "google/gemini-2.0-flash-exp:free"
+            return client, "deepseek/deepseek-chat-v3-0324:free"
         except Exception as e:
             logger.warning(f"OpenRouter connection failed: {str(e)}")
 
