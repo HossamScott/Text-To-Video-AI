@@ -24,9 +24,9 @@ docker stop $(docker ps -aq --filter "ancestor=video-generator") && docker rm -f
 docker build --no-cache -t video-generator .
 
 
-docker run -d -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output --name video-generator video-generator
+docker run -d -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output -e OLLAMA_HOST="http://host.docker.internal:11434" --name video-generator video-generator
 
-docker run -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output --name video-generator video-generator
+docker run -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output -e OLLAMA_HOST="http://host.docker.internal:11434" --name video-generator video-generator
 
 curl -X POST -H "Content-Type: application/json" \
 -d '{
@@ -53,3 +53,54 @@ http://localhost:5050/generate
 curl http://localhost:5050/status/859b86aa-97e2-4354-bb45-ded4d96c8750
 curl http://localhost:5050/tasks
 curl -X POST http://localhost:5050/tasks/{task_id}/cancel
+
+
+
+
+
+docker run -p 5050:5050 \
+  --add-host=host.docker.internal:host-gateway \
+  -v /tmp:/tmp \
+  -v /home/administrator/Text-To-Video-AI/videos:/app/output \
+  -e OLLAMA_HOST="http://host.docker.internal:11434" \
+  --name video-generator \
+  video-generator
+
+
+
+
+
+
+
+
+and code for : 
+Video Generation Improvements:
+
+Add support for more video servers (Pixabay, Unsplash, etc.)
+
+Implement local video caching to reduce API calls
+
+Add transitions between video clips + UI/UX Enhancements:
+
+Add a simple web interface to monitor progress
+
+Support video preview before final render
+
+Allow parameter tuning during generation + Performance Optimizations:
+
+Implement background task queue (Celery/RQ)
+
+Add video generation batching
+
+
+Security Improvements:
+
+Remove hardcoded API keys
+
+Add rate limiting
+
+Implement request validation + Monitoring:
+
+Add Prometheus metrics
+
+Log generation statistics
