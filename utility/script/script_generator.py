@@ -6,7 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 def get_ai_client():    
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "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")
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "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")
     if not openrouter_key:
         raise ValueError("OPENROUTER_API_KEY is required")
     
@@ -102,15 +102,21 @@ def generate_script(topic, language="en"):
         
         # Improved JSON parsing
         try:
-            if isinstance(content, str):
-                script = json.loads(content)["script"]
+            if "```json" in content:
+                # Extract JSON from between the markdown code blocks
+                json_str = content.split("```json")[1].split("```")[0].strip()
+                script = json.loads(json_str)["script"]
             else:
-                script = content["script"]  # In case response is already a dict
+                # Handle direct JSON response
+                if isinstance(content, str):
+                    script = json.loads(content)["script"]
+                else:
+                    script = content["script"]
             return script
-        except (json.JSONDecodeError, KeyError) as e:
-            logger.error(f"Failed to parse response: {content}")
-            raise ValueError("Failed to parse AI response")
+        except (json.JSONDecodeError, KeyError, IndexError) as e:
+            logger.error(f"Failed to parse response. Raw content: {content}")
+            raise ValueError("Failed to parse AI response. The response format may have changed.")
             
     except Exception as e:
         logger.error(f"API request failed: {str(e)}")
-        raise 
+        raise

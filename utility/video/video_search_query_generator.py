@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 def get_ai_client():
     """Initialize and return the appropriate AI client with fallback support"""
     # Try OpenRouter first
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "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")
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "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")
     if not openrouter_key:
         raise ValueError("OPENROUTER_API_KEY is required")
     if openrouter_key:
