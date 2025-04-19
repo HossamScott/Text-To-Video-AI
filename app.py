@@ -164,15 +164,18 @@ def generate_video_async(task_id, topic, language, voice, font_settings):
         if os.path.exists(SAMPLE_FILE_NAME):
             os.remove(SAMPLE_FILE_NAME)
             
-    except Exception as e:
-        if str(e) == "Task cancelled by user":
-            # Already handled in check_cancellation
-            pass
-        else:
-            with task_lock:
-                tasks[task_id]['status'] = 'failed'
-                tasks[task_id]['error'] = str(e)
-                tasks[task_id]['updated_at'] = time.time()
+except Exception as e:
+    if str(e) == "Task cancelled by user":
+        pass
+    else:
+        error_msg = str(e)
+        error_type = type(e).__name__
+        logger.error(f"Task {task_id} failed: {error_msg}", exc_info=True)
+        with task_lock:
+            tasks[task_id]['status'] = 'failed'
+            tasks[task_id]['error'] = error_msg
+            tasks[task_id]['error_type'] = error_type
+            tasks[task_id]['updated_at'] = time.time()
     finally:
         # Clean up the thread reference
         with task_lock:

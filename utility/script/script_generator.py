@@ -1,9 +1,11 @@
 import os
 import json
-from utility.retry_utils import retry_api_call, handle_common_errors
-import logging
 import requests
+import logging
+from utility.retry_utils import retry_api_call, handle_common_errors
+
 logger = logging.getLogger(__name__)
+
 
 # Ollama configuration
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434")
