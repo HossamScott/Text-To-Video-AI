@@ -69,7 +69,32 @@ docker run -p 5050:5050 \
 
 
 
+------------------------------------------------IMAGES
+sudo lsof -i :5060
+sudo kill -9 $(sudo lsof -t -i:5060)
+nohup python3 generate_image_imakeapp.py > flask.log 2>&1 &
 
+curl --location 'https://techs-solutions.com/generate' \
+--header 'Content-Type: application/json' \
+--data '
+
+{
+    "prompt": "a beautiful landscape on earth",
+    "api_key": "FPSX65796b2546e449fdbded97a437554ecf",
+    "aspect_ratio": "square_1_1",
+    "effects": {
+        "color": "goldglow",
+        "framing": "portrait",
+        "lightning": "iridescent"
+    },
+    "colors": [
+        {
+            "color": "#EFBF04",
+            "weight": 0.5
+        }
+    ],
+    "seed": 1235
+}'
 
 
 
