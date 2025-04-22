@@ -57,25 +57,30 @@ def fix_json(json_str):
     return json_str
 
 def getVideoSearchQueriesTimed(script, captions_timed, language="en"):
+    if not captions_timed:
+        raise ValueError("Empty captions data")
+    
     end = captions_timed[-1][0][1]
+    out = [[[0, 0], []]]  # Initialize with proper structure
+    
     try:
-        out = [[[0, 0], ""]]
-        while out[-1][0][1] != end:
+        while out[-1][0][1] < end:  # Changed != to < for safety
             content = call_AI_api(script, captions_timed, language)
             
-            # Remove .replace() since content is already a dict
-            if isinstance(content, str):
-                content = json.loads(fix_json(content))
+            # Validate response structure
+            if not isinstance(content, list):
+                raise ValueError(f"Expected list, got {type(content)}")
+                
+            if not all(len(segment) == 2 for segment in content):
+                raise ValueError("Malformed segment in response")
+                
+            out = content
             
-            try:
-                out = content  # Directly use the parsed dict
-            except Exception as e:
-                logger.error(f"Error processing response: {str(e)}")
-                raise
         return out
+        
     except Exception as e:
         logger.error(f"Error processing response: {str(e)}")
-        raise
+        raise  # Re-raise to be handled by the caller
 
 @handle_common_errors
 @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2)
@@ -111,6 +116,14 @@ def call_AI_api(script, captions_timed, language="en"):
         
         # Log the response
         log_response(LOG_TYPE_GPT, script, text)
+        if not response.ok:
+            raise ValueError(f"API request failed with status {response.status_code}")
+            
+        content = response.json()
+        if not content.get("message"):
+            raise ValueError("Invalid response format from Ollama")
+            
+        text = content["message"]["content"].strip()
         
         # Parse the JSON response with error handling
         try:
