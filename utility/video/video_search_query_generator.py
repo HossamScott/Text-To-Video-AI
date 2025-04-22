@@ -144,7 +144,7 @@ def call_AI_api(script, captions_timed, language="en"):
     print("=== API REQUEST ===")
     print(json.dumps(payload, indent=2))
 
-    response = requests.post(f"{OLLAMA_HOST}/api/chat", json=payload, timeout=120)
+    response = requests.post(f"{OLLAMA_HOST}/api/chat", json=payload, timeout=600)
     response.raise_for_status()
     result = response.json()
 
