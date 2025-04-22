@@ -61,12 +61,17 @@ def getVideoSearchQueriesTimed(script, captions_timed, language="en"):
     try:
         out = [[[0, 0], ""]]
         while out[-1][0][1] != end:
-            content = call_AI_api(script, captions_timed, language).replace("'", '"')
+            content = call_AI_api(script, captions_timed, language)
+            
+            # Remove .replace() since content is already a dict
+            if isinstance(content, str):
+                content = json.loads(fix_json(content))
+            
             try:
-                out = json.loads(content)
+                out = content  # Directly use the parsed dict
             except Exception as e:
-                content = fix_json(content.replace("```json", "").replace("```", ""))
-                out = json.loads(content)
+                logger.error(f"Error processing response: {str(e)}")
+                raise
         return out
     except Exception as e:
         logger.error(f"Error processing response: {str(e)}")

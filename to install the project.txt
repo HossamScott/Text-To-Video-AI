@@ -24,9 +24,9 @@ docker stop $(docker ps -aq --filter "ancestor=video-generator") && docker rm -f
 docker build --no-cache -t video-generator .
 
 
-docker run -d -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output -e OLLAMA_HOST="http://host.docker.internal:11434" --name video-generator video-generator
+docker run -d -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output -e OLLAMA_HOST="http://172.17.0.1:11434" --name video-generator video-generator
 
-docker run -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output -e OLLAMA_HOST="http://host.docker.internal:11434" --name video-generator video-generator
+docker run -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output -e OLLAMA_HOST="http://172.17.0.1:11434" --name video-generator video-generator
 
 curl -X POST -H "Content-Type: application/json" \
 -d '{
@@ -50,7 +50,7 @@ curl -X POST -H "Content-Type: application/json" \
 http://localhost:5050/generate 
 
 {"task_id":"53e8bd38-4a8d-4e3e-bfb0-c08eab839e7a"}
-curl http://localhost:5050/status/859b86aa-97e2-4354-bb45-ded4d96c8750
+curl http://localhost:5050/status/"898d2a4b-07f6-4157-a256-9d8ff77b2bc8
 curl http://localhost:5050/tasks
 curl -X POST http://localhost:5050/tasks/{task_id}/cancel
 
