@@ -31,31 +31,48 @@ def search_videos(query_string, orientation_landscape=True):
 
 
 def getBestVideo(query_string, orientation_landscape=True, used_vids=[]):
-    vids = search_videos(query_string, orientation_landscape)
-    videos = vids['videos']  # Extract the videos list from JSON
+    try:
+        vids = search_videos(query_string, orientation_landscape)
+        
+        # Check if 'videos' exists in response
+        if not vids or 'videos' not in vids:
+            logger.error(f"No videos found in response for query: {query_string}")
+            return None
+            
+        videos = vids['videos']
 
-    # Filter and extract videos with width and height as 1920x1080 for landscape or 1080x1920 for portrait
-    if orientation_landscape:
-        filtered_videos = [video for video in videos if video['width'] >= 1920 and video['height'] >= 1080 and video['width']/video['height'] == 16/9]
-    else:
-        filtered_videos = [video for video in videos if video['width'] >= 1080 and video['height'] >= 1920 and video['height']/video['width'] == 16/9]
+        # Filter videos
+        if orientation_landscape:
+            filtered_videos = [v for v in videos 
+                             if v.get('width', 0) >= 1920 
+                             and v.get('height', 0) >= 1080
+                             and abs(v.get('width', 0)/v.get('height', 1) - 16/9 < 0.1]
+        else:
+            filtered_videos = [v for v in videos 
+                             if v.get('width', 0) >= 1080 
+                             and v.get('height', 0) >= 1920
+                             and abs(v.get('height', 0)/v.get('width', 1) - 16/9 < 0.1]
 
-    # Sort the filtered videos by duration in ascending order
-    sorted_videos = sorted(filtered_videos, key=lambda x: abs(15-int(x['duration'])))
+        if not filtered_videos:
+            logger.warning(f"No matching videos found for query: {query_string}")
+            return None
 
-    # Extract the top 3 videos' URLs
-    for video in sorted_videos:
-        for video_file in video['video_files']:
-            if orientation_landscape:
-                if video_file['width'] == 1920 and video_file['height'] == 1080:
-                    if not (video_file['link'].split('.hd')[0] in used_vids):
-                        return video_file['link']
-            else:
-                if video_file['width'] == 1080 and video_file['height'] == 1920:
-                    if not (video_file['link'].split('.hd')[0] in used_vids):
-                        return video_file['link']
-    print("NO LINKS found for this round of search with query :", query_string)
-    return None
+        # Sort by duration
+        sorted_videos = sorted(filtered_videos, key=lambda x: abs(15-int(x.get('duration', 0)))
+
+        # Find best video URL
+        for video in sorted_videos:
+            for video_file in video.get('video_files', []):
+                url = video_file.get('link')
+                if url and not (url.split('.hd')[0] in used_vids):
+                    return url
+                    
+        logger.warning(f"No unused videos found for query: {query_string}")
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error processing video search for {query_string}: {str(e)}")
+        return None
 
 def generate_video_url(timed_video_searches, video_server):
     timed_video_urls = []

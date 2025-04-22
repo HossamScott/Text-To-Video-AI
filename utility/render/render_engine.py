@@ -37,7 +37,14 @@ def get_output_media(audio_file_path, timed_captions, background_video_data, vid
     # Create output directory if it doesn't exist
     output_dir = "/app/output"
     os.makedirs(output_dir, exist_ok=True)
-    
+    if font_settings is None:
+        font_settings = {
+            'size': 100,
+            'color': 'white',
+            'stroke_color': 'black',
+            'stroke_width': 3,
+            'family': 'Arial'
+        }    
     # Generate unique filename with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     OUTPUT_FILE_NAME = os.path.join(output_dir, f"rendered_video_{timestamp}.mp4")
@@ -73,7 +80,7 @@ def get_output_media(audio_file_path, timed_captions, background_video_data, vid
             color=font_settings['color'],
             stroke_color=font_settings['stroke_color'],
             stroke_width=font_settings['stroke_width'],
-            font="Arial",
+            font=font_settings['family'],
             method="caption",
             size=(1920, None)
         )

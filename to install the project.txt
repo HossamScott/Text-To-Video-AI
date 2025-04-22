@@ -50,7 +50,7 @@ curl -X POST -H "Content-Type: application/json" \
 http://localhost:5050/generate 
 
 {"task_id":"53e8bd38-4a8d-4e3e-bfb0-c08eab839e7a"}
-curl http://localhost:5050/status/"898d2a4b-07f6-4157-a256-9d8ff77b2bc8
+curl http://localhost:5050/status/e3273d0d-0852-4e09-9334-4e2c291ac9c8
 curl http://localhost:5050/tasks
 curl -X POST http://localhost:5050/tasks/{task_id}/cancel
 
