@@ -123,7 +123,7 @@ def getVideoSearchQueriesTimed(script, captions_timed, language="en"):
         logger.error(f"Error processing response: {str(e)}")
         raise
 @handle_common_errors
-@retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2)
+@retry_api_call(max_retries=3, initial_delay=2, backoff_factor=2)
 def call_AI_api(script, captions_timed, language="en"):
     try:
         payload = {
@@ -139,7 +139,7 @@ def call_AI_api(script, captions_timed, language="en"):
         response = requests.post(
             f"{OLLAMA_HOST}/api/chat",
             json=payload,
-            timeout=30
+            timeout=120
         )
         response.raise_for_status()
 
