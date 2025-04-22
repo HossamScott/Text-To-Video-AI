@@ -89,34 +89,32 @@ OUTPUT (JSON ONLY):""",
 }
 
 
+import re
+
 def extract_json_from_text(text):
-    """Enhanced JSON extraction with malformed structure handling"""
-    try:
-        # First try direct parse
-        return json.loads(text)
-    except json.JSONDecodeError:
-        # Handle malformed keys and values
-        text = re.sub(r'("\s*:)\s*(\[)', r'\1 \2', text)  # Fix missing keys
-        text = re.sub(r'("\s*\[)', r'\1', text)  # Remove quotes around arrays
-        text = re.sub(r'\\"', '"', text)  # Unescape quotes
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            # Fallback to manual parsing
-            segments = []
-            for line in text.splitlines():
-                if '[[' in line:
-                    parts = line.split(':', 1)
-                    if len(parts) == 2:
-                        time_part = parts[0].strip().replace('"', '')
-                        keys_part = parts[1].replace('"', '').strip()
-                        try:
-                            time_range = json.loads(time_part)
-                            keywords = json.loads(keys_part)
-                            segments.append([time_range, keywords])
-                        except:
-                            continue
-            return segments if segments else None
+    """
+    Scan the raw model output for chunks like:
+      [[0.00, 2.50], ["foo", "bar", "baz"]]
+    and return a list of [[start, end], [kw1, kw2, kw3]] entries.
+    """
+    pattern = re.compile(
+        r"""\[\[\s*            # literal [[, optional space
+            (?P<start>\d+(\.\d+)?)\s*,\s*   # start time
+            (?P<end>\d+(\.\d+)?)\s*\]\s*,\s* # end time ], 
+            \[\s*"(?P<k1>[^"]+)"\s*,\s*      # "kw1",
+            "(?P<k2>[^"]+)"\s*,\s*           # "kw2",
+            "(?P<k3>[^"]+)"\s*\]\s*\]        # "kw3" ]]
+        """,
+        re.VERBOSE
+    )
+    segments = []
+    for m in pattern.finditer(text):
+        segments.append([
+            [ float(m.group("start")), float(m.group("end")) ],
+            [ m.group("k1"), m.group("k2"), m.group("k3") ]
+        ])
+    return segments if segments else None
+
 
 def normalize_response(content):
     """Handle different response formats"""
