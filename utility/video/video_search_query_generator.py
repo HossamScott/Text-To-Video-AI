@@ -30,23 +30,63 @@ _, model = get_ai_client()
 
 # Language-specific prompts
 PROMPTS = {
-    "en": """# Instructions [English]
-Given the following video script and timed captions, extract three visually concrete and specific keywords for each time segment that can be used to search for background videos. The keywords should be short and capture the main essence of the sentence. They can be synonyms or related terms. If a caption is vague or general, consider the next timed caption for more context. If a keyword is a single word, try to return a two-word keyword that is visually concrete. If a time frame contains two or more important pieces of information, divide it into shorter time frames with one keyword each. Ensure that the time periods are strictly consecutive and cover the entire length of the video. Each keyword should cover between 2-4 seconds. The output should be in JSON format, like this: [[[t1, t2], ["keyword1", "keyword2", "keyword3"]], [[t2, t3], ["keyword4", "keyword5", "keyword6"]], ...]. Please handle all edge cases, such as overlapping time segments, vague or general captions, and single-word keywords.
+    "en": """You are a video search query generator. For each time segment in the captions, generate exactly 3 visually concrete keywords for finding background videos.
 
-Important Guidelines:
-- Use only English in your text queries
-- Each search string must depict something visual
-- The depictions have to be extremely visually concrete
-- Return only the JSON response with no extra text""",
+STRICT OUTPUT FORMAT (JSON ONLY):
+[
+  [[start1, end1], ["keyword1", "keyword2", "keyword3"]],
+  [[start2, end2], ["keyword4", "keyword5", "keyword6"]]
+]
 
-    "ar": """# التعليمات [العربية]
-بناءً على السيناريو والتعليقات الموقتة التالية، استخرج ثلاث كلمات مفتاحية محددة ومرئية لكل مقطع زمني يمكن استخدامها للبحث عن مقاطع فيديو خلفية. يجب أن تكون الكلمات المفتاحية قصيرة وتلتقط الجوهر الرئيسي للجملة. يمكن أن تكون مرادفات أو مصطلحات ذات صلة. إذا كان التعليق غامضًا أو عامًا، ففكر في التعليق الموقت التالي لمزيد من السياق. إذا كانت الكلمة المفتاحية كلمة واحدة، فحاول إرجاع كلمة مفتاحية مكونة من كلمتين تكون مرئية بشكل ملموس. إذا كان الإطار الزمني يحتوي على جزأين مهمين أو أكثر من المعلومات، فقسمه إلى أطر زمنية أقصر بكلمة مفتاحية واحدة لكل منها. تأكد من أن الفترات الزمنية متتالية بشكل صارم وتغطي الطول الكامل للفيديو. يجب أن تغطي كل كلمة مفتاحية ما بين 2-4 ثوانٍ. يجب أن يكون الإخراج بتنسيق JSON، مثل هذا: [[[t1, t2], ["keyword1", "keyword2", "keyword3"]], [[t2, t3], ["keyword4", "keyword5", "keyword6"]], ...]. يرجى التعامل مع جميع الحالات الطرفية، مثل المقاطع الزمنية المتداخلة، والتعليقات الغامضة أو العامة، والكلمات المفتاحية المكونة من كلمة واحدة.
+RULES:
+1. Keywords MUST be:
+   - Visually concrete (e.g., "futuristic city" not "future")
+   - In English only
+   - 1-3 words each
+   - Specific to the time segment
+2. Time segments MUST:
+   - Be consecutive
+   - Cover the entire video duration
+   - Each be 2-4 seconds
+3. OUTPUT MUST:
+   - Be pure JSON (no markdown, no explanations)
+   - Contain exactly 3 keywords per segment
+   - Maintain the exact specified format
 
-إرشادات مهمة:
-- استخدم فقط اللغة الإنجليزية في استعلامات النص
-- يجب أن يصور كل سلسلة بحث شيئًا مرئيًا
-- يجب أن تكون التصوير ملموسًا للغاية من الناحية المرئية
-- أعد فقط استجابة JSON بدون نص إضافي"""
+INPUT:
+Script: {script}
+Timed Captions: {captions}
+
+OUTPUT (JSON ONLY):""",
+
+    "ar": """أنت مولد استعلامات بحث الفيديو. لكل مقطع زمني في التعليقات، قم بإنشاء 3 كلمات مفتاحية مرئية ملموسة للعثور على مقاطع الفيديو الخلفية.
+
+تنسيق الإخراج الصارم (JSON فقط):
+[
+  [[البداية1, النهاية1], ["الكلمة1", "الكلمة2", "الكلمة3"]],
+  [[البداية2, النهاية2], ["الكلمة4", "الكلمة5", "الكلمة6"]]
+]
+
+القواعد:
+1. يجب أن تكون الكلمات المفتاحية:
+   - مرئية ملموسة (مثال: "مدينة مستقبلية" وليس "مستقبل")
+   - باللغة الإنجليزية فقط
+   - من 1-3 كلمات لكل منها
+   - محددة للمقطع الزمني
+2. المقاطع الزمنية يجب أن:
+   - تكون متتالية
+   - تغطي مدة الفيديو كاملة
+   - كل منها من 2-4 ثواني
+3. يجب أن يكون الإخراج:
+   - JSON خالص (بدون تنسيق markdown، بدون شروحات)
+   - يحتوي على 3 كلمات مفتاحية لكل مقطع بالضبط
+   - يحافظ على التنسيق المحدد بدقة
+
+المدخلات:
+النص: {script}
+التعليقات الموقتة: {captions}
+
+الإخراج (JSON فقط):"""
 }
 
 def fix_json(json_str):
@@ -60,90 +100,75 @@ def getVideoSearchQueriesTimed(script, captions_timed, language="en"):
     if not captions_timed:
         raise ValueError("Empty captions data")
     
-    end = captions_timed[-1][0][1]
-    out = [[[0, 0], []]]  # Initialize with proper structure
-    
     try:
-        while out[-1][0][1] < end:  # Changed != to < for safety
-            content = call_AI_api(script, captions_timed, language)
+        # Get the raw response
+        response = call_AI_api(script, captions_timed, language)
+        
+        # Validate the response structure
+        if not isinstance(response, list):
+            raise ValueError(f"Expected list, got {type(response)}")
             
-            # Validate response structure
-            if not isinstance(content, list):
-                raise ValueError(f"Expected list, got {type(content)}")
-                
-            if not all(len(segment) == 2 for segment in content):
-                raise ValueError("Malformed segment in response")
-                
-            out = content
+        if not all(
+            isinstance(segment, list) and 
+            len(segment) == 2 and
+            isinstance(segment[0], list) and
+            isinstance(segment[1], list)
+            for segment in response
+        ):
+            raise ValueError("Malformed response segments")
             
-        return out
+        return response
         
     except Exception as e:
         logger.error(f"Error processing response: {str(e)}")
-        raise  # Re-raise to be handled by the caller
-
+        raise
 @handle_common_errors
 @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2)
 def call_AI_api(script, captions_timed, language="en"):
-    """Make API call to Ollama with proper error handling"""
     try:
-        # Prepare the input content
-        user_content = f"""Script: {script}\nTimed Captions: {json.dumps(captions_timed)}"""
-        
-        # Prepare the Ollama API request
         payload = {
             "model": model,
             "messages": [
                 {"role": "system", "content": PROMPTS.get(language, PROMPTS["en"])},
-                {"role": "user", "content": user_content}
+                {"role": "user", "content": f"Script: {script}\nTimed Captions: {json.dumps(captions_timed)}"}
             ],
             "stream": False,
-            "format": "json"  # Request JSON response
+            "format": "json"
         }
 
-        # Make the API call
         response = requests.post(
             f"{OLLAMA_HOST}/api/chat",
             json=payload,
-            headers={"Content-Type": "application/json"}
+            timeout=30
         )
         response.raise_for_status()
 
-        # Process the response
-        content = response.json()
-        text = content["message"]["content"].strip()
-        text = re.sub(r'\s+', ' ', text)
+        # Extract and clean the response
+        result = response.json()
+        content = result["message"]["content"].strip()
         
-        # Log the response
-        log_response(LOG_TYPE_GPT, script, text)
-        if not response.ok:
-            raise ValueError(f"API request failed with status {response.status_code}")
+        # Remove any markdown formatting
+        if content.startswith("```json"):
+            content = content[7:-3].strip()
+        elif content.startswith("```"):
+            content = content[3:-3].strip()
             
-        content = response.json()
-        if not content.get("message"):
-            raise ValueError("Invalid response format from Ollama")
-            
-        text = content["message"]["content"].strip()
-        
-        # Parse the JSON response with error handling
+        # Parse the JSON
         try:
-            if "```json" in text:
-                # Extract JSON from markdown
-                json_str = text.split("```json")[1].split("```")[0].strip()
-                return json.loads(json_str)
-            elif isinstance(text, str):
-                return json.loads(text)
-            return text  # if it's already a dict
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON response: {text}")
-            raise ValueError("Invalid JSON response from AI API")
-            
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Ollama API request failed: {str(e)}")
-        raise ValueError("Failed to communicate with Ollama API")
+            parsed = json.loads(content)
+            if not isinstance(parsed, list):
+                raise ValueError("Response is not a list")
+            return parsed
+        except json.JSONDecodeError:
+            # Try to extract JSON from malformed response
+            json_match = re.search(r'\[\[\[.*\]\]\]', content)
+            if json_match:
+                return json.loads(json_match.group(0))
+            raise
+
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        raise
+        logger.error(f"API call failed: {str(e)}")
+        raise ValueError(f"API processing error: {str(e)}")
 
 def merge_empty_intervals(segments):
     """Merge consecutive empty intervals in the video segments"""
