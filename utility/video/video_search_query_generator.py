@@ -152,16 +152,28 @@ def extract_json_from_text(text):
 @retry_api_call(max_retries=3, initial_delay=2, backoff_factor=2)
 def call_AI_api(script, captions_timed, language="en"):
     try:
+        # Prepare request payload
+        system_prompt = PROMPTS.get(language, PROMPTS["en"])
+        user_content = f"Script: {script}\nTimed Captions: {json.dumps(captions_timed)}"
+        
         payload = {
             "model": model,
             "messages": [
-                {"role": "system", "content": PROMPTS.get(language, PROMPTS["en"])},
-                {"role": "user", "content": f"Script: {script}\nTimed Captions: {json.dumps(captions_timed)}"}
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content}
             ],
             "stream": False,
             "format": "json"
         }
 
+        # Log request details
+        logger.debug("\n=== API REQUEST ===")
+        logger.debug(f"Model: {model}")
+        logger.debug(f"System Prompt:\n{system_prompt}")
+        logger.debug(f"User Content:\n{user_content}")
+        logger.debug("===================")
+
+        # Make API call
         response = requests.post(
             f"{OLLAMA_HOST}/api/chat",
             json=payload,
@@ -169,33 +181,60 @@ def call_AI_api(script, captions_timed, language="en"):
         )
         response.raise_for_status()
 
+        # Process response
         result = response.json()
         raw_content = result.get("message", {}).get("content", "")
-        logger.debug(f"Raw API response: {raw_content}")
+        
+        # Log full response
+        logger.debug("\n=== API RESPONSE ===")
+        logger.debug("Full Response:")
+        logger.debug(json.dumps(result, indent=2))
+        logger.debug(f"Raw Content:\n{raw_content}")
+        logger.debug("====================")
 
         # Clean and parse content
         clean_content = re.sub(r'```json|```', '', raw_content).strip()
+        logger.debug("\n=== PROCESSED CONTENT ===")
+        logger.debug(clean_content)
+        logger.debug("=======================")
+
+        # Extract JSON from response
         parsed = extract_json_from_text(clean_content) or {}
-        
-        # Normalize response structure
+        logger.debug("\n=== PARSED STRUCTURE ===")
+        logger.debug(f"Type: {type(parsed)}")
+        logger.debug(f"Content: {parsed}")
+        logger.debug("======================")
+
+        # Normalize and validate response
         normalized = normalize_response(parsed)
         
         if not isinstance(normalized, list):
-            raise ValueError(f"Invalid response format: {type(normalized)}")
+            logger.error(f"Invalid response type: {type(normalized)}")
+            raise ValueError(f"Expected list, got {type(normalized)}")
 
-        # Validate individual segments
-        for segment in normalized:
-            if not (isinstance(segment, list) and len(segment) == 2):
-                raise ValueError(f"Invalid segment format: {segment}")
-            if not (isinstance(segment[0], list) and isinstance(segment[1], list)):
-                raise ValueError(f"Invalid segment values: {segment}")
+        # Validate segments
+        for i, segment in enumerate(normalized):
+            if not (isinstance(segment, list) and len(segment) == 2:
+                logger.error(f"Invalid segment {i}: {segment}")
+                raise ValueError(f"Segment {i} has invalid format")
+            if not (isinstance(segment[0], list) and isinstance(segment[1], list):
+                logger.error(f"Invalid segment values {i}: {segment}")
+                raise ValueError(f"Segment {i} has invalid values")
 
         return normalized
 
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode failed. Content: {clean_content}")
+        raise ValueError(f"Failed to parse JSON: {str(e)}")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"API request failed. Status: {response.status_code if 'response' in locals() else 'N/A'}")
+        raise ValueError(f"API communication error: {str(e)}")
     except Exception as e:
-        logger.error(f"API processing failed. Last response: {raw_content}")
+        logger.error(f"Unexpected error: {type(e).__name__}: {str(e)}")
+        if 'result' in locals():
+            logger.error(f"Last response: {json.dumps(result, indent=2)}")
         raise ValueError(f"API processing error: {str(e)}")
-
+        
 # @handle_common_errors
 # @retry_api_call(max_retries=3, initial_delay=2, backoff_factor=2)
 # def call_AI_api(script, captions_timed, language="en"):
