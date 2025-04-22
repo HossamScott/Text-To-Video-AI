@@ -130,7 +130,7 @@ def normalize_response(content):
     return content
 
 def validate_segment(segment, index):
-    """Detailed segment validation"""
+    """Detailed validation for each response segment"""
     if not isinstance(segment, list):
         raise ValueError(f"Segment {index} is not a list")
         
@@ -139,14 +139,13 @@ def validate_segment(segment, index):
         
     time_part, keywords_part = segment
     
-    # Validate time range
+    # Validate time range format (FIXED SYNTAX HERE)
     if not (isinstance(time_part, list) and len(time_part) == 2):
-        raise ValueError(f"Segment {index} time format invalid: {time_part}")
+        raise ValueError(f"Invalid time format in segment {index}: {time_part}")
         
-    # Validate keywords
+    # Validate keywords format (FIXED SYNTAX HERE)
     if not (isinstance(keywords_part, list) and len(keywords_part) == 3):
-        raise ValueError(f"Segment {index} keywords invalid: {keywords_part}")
-
+        raise ValueError(f"Invalid keywords in segment {index}: {keywords_part}")
 
 @handle_common_errors
 @retry_api_call(max_retries=3, initial_delay=2, backoff_factor=2)
@@ -216,23 +215,7 @@ def call_AI_api(script, captions_timed, language="en"):
         # Validate segments with detailed checking
         for i, segment in enumerate(normalized):
             try:
-                # Validate segment structure
-                if not isinstance(segment, list):
-                    raise ValueError(f"Segment {i} is not a list")
-                    
-                if len(segment) != 2:
-                    raise ValueError(f"Segment {i} has {len(segment)} elements (needs 2)")
-                    
-                time_part, keywords_part = segment
-                
-                # Validate time range
-                if not (isinstance(time_part, list) and len(time_part) == 2:
-                    raise ValueError(f"Time format invalid in segment {i}: {time_part}")
-                    
-                # Validate keywords
-                if not (isinstance(keywords_part, list) and len(keywords_part) == 3:
-                    raise ValueError(f"Keywords invalid in segment {i}: {keywords_part}")
-                    
+                validate_segment(segment, i)
             except ValueError as e:
                 logger.error(f"Validation failed for segment {i}:")
                 logger.error(f"Segment structure: {segment}")
