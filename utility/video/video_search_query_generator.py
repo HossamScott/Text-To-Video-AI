@@ -92,39 +92,61 @@ OUTPUT (JSON ONLY):""",
 import re
 
 def extract_json_from_text(text):
-    """
-    Scan the raw model output for chunks like:
-      [[0.00, 2.50], ["foo", "bar", "baz"]]
-    and return a list of [[start, end], [kw1, kw2, kw3]] entries.
-    """
-    pattern = re.compile(
-        r"""\[\[\s*            # literal [[, optional space
-            (?P<start>\d+(\.\d+)?)\s*,\s*   # start time
-            (?P<end>\d+(\.\d+)?)\s*\]\s*,\s* # end time ], 
-            \[\s*"(?P<k1>[^"]+)"\s*,\s*      # "kw1",
-            "(?P<k2>[^"]+)"\s*,\s*           # "kw2",
-            "(?P<k3>[^"]+)"\s*\]\s*\]        # "kw3" ]]
-        """,
-        re.VERBOSE
-    )
-    segments = []
-    for m in pattern.finditer(text):
-        segments.append([
-            [ float(m.group("start")), float(m.group("end")) ],
-            [ m.group("k1"), m.group("k2"), m.group("k3") ]
-        ])
-    return segments if segments else None
+    """Enhanced JSON extraction that handles the malformed format"""
+    try:
+        # First try standard JSON parse
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # Handle the specific malformed format we're seeing
+        segments = []
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith('{') or line.startswith('}'):
+                continue
+                
+            # Extract time range part (before the colon)
+            time_part = line.split(':', 1)[0].strip()
+            time_part = time_part.replace('"', '').replace("'", "")
+            
+            # Extract keywords part (after the colon)
+            keywords_part = line.split(':', 1)[1].strip()
+            keywords_part = keywords_part.replace('"', '').replace("'", "")
+            
+            try:
+                # Parse time range
+                time_range = json.loads(time_part)
+                # Parse keywords (remove trailing commas)
+                keywords = json.loads(keywords_part.rstrip(','))
+                
+                if isinstance(time_range, list) and len(time_range) == 2 and \
+                   isinstance(keywords, list) and len(keywords) == 3:
+                    segments.append([time_range, keywords])
+            except:
+                continue
+                
+        return segments if segments else None
+
 
 
 def normalize_response(content):
     """Handle different response formats"""
     if isinstance(content, dict):
-        # Convert dict format to list
-        return [
-            [json.loads(k.replace('"', '')), v]
-            for k, v in content.items()
-            if '[[' in k and isinstance(v, list)
-        ]
+        # Convert the malformed dictionary format to proper list
+        segments = []
+        for k, v in content.items():
+            try:
+                # Clean and parse the time range key
+                time_part = k.replace('"', '').replace("'", "").strip()
+                time_range = json.loads(time_part)
+                
+                # Ensure keywords are proper list
+                keywords = v if isinstance(v, list) else []
+                
+                if len(time_range) == 2 and len(keywords) == 3:
+                    segments.append([time_range, keywords])
+            except:
+                continue
+        return segments
     return content
 
 def validate_segment(segment, index):
@@ -211,15 +233,18 @@ def call_AI_api(script, captions_timed, language="en"):
 
         # Validate segments - FIXED SYNTAX HERE
         # Validate segments with detailed checking
+        if not normalized:
+            raise ValueError("No valid segments found in response")
+            
+        # Validate each segment
         for i, segment in enumerate(normalized):
-            try:
-                validate_segment(segment, i)
-            except ValueError as e:
-                logger.error(f"Validation failed for segment {i}:")
-                logger.error(f"Segment structure: {segment}")
-                logger.error(f"Error details: {str(e)}")
-                logger.error(f"Original content: {clean_content}")
-                raise
+            if not (isinstance(segment, list) and len(segment) == 2):
+                raise ValueError(f"Segment {i} has invalid format")
+            time_part, keywords_part = segment
+            if not (isinstance(time_part, list) and len(time_part) == 2):
+                raise ValueError(f"Segment {i} has invalid time range")
+            if not (isinstance(keywords_part, list) and len(keywords_part) == 3):
+                raise ValueError(f"Segment {i} has invalid keywords")
 
         return normalized
 
