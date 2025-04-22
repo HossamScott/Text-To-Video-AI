@@ -147,7 +147,6 @@ def extract_json_from_text(text):
 #     except Exception as e:
 #         logger.error(f"Error processing response: {str(e)}")
 #         raise
-
 @handle_common_errors
 @retry_api_call(max_retries=3, initial_delay=2, backoff_factor=2)
 def call_AI_api(script, captions_timed, language="en"):
@@ -212,12 +211,12 @@ def call_AI_api(script, captions_timed, language="en"):
             logger.error(f"Invalid response type: {type(normalized)}")
             raise ValueError(f"Expected list, got {type(normalized)}")
 
-        # Validate segments
+        # Validate segments - FIXED SYNTAX HERE
         for i, segment in enumerate(normalized):
-            if not (isinstance(segment, list) and len(segment) == 2:
+            if not (isinstance(segment, list) and len(segment) == 2):
                 logger.error(f"Invalid segment {i}: {segment}")
                 raise ValueError(f"Segment {i} has invalid format")
-            if not (isinstance(segment[0], list) and isinstance(segment[1], list):
+            if not (isinstance(segment[0], list) and isinstance(segment[1], list)):
                 logger.error(f"Invalid segment values {i}: {segment}")
                 raise ValueError(f"Segment {i} has invalid values")
 
@@ -234,7 +233,7 @@ def call_AI_api(script, captions_timed, language="en"):
         if 'result' in locals():
             logger.error(f"Last response: {json.dumps(result, indent=2)}")
         raise ValueError(f"API processing error: {str(e)}")
-        
+
 # @handle_common_errors
 # @retry_api_call(max_retries=3, initial_delay=2, backoff_factor=2)
 # def call_AI_api(script, captions_timed, language="en"):
