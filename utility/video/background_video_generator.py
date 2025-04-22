@@ -41,24 +41,24 @@ def getBestVideo(query_string, orientation_landscape=True, used_vids=[]):
             
         videos = vids['videos']
 
-        # Filter videos
+        # Filter videos - FIXED SYNTAX HERE
         if orientation_landscape:
             filtered_videos = [v for v in videos 
                              if v.get('width', 0) >= 1920 
                              and v.get('height', 0) >= 1080
-                             and abs(v.get('width', 0)/v.get('height', 1) - 16/9 < 0.1]
+                             and abs(v.get('width', 0)/v.get('height', 1) - 16/9) < 0.1]
         else:
             filtered_videos = [v for v in videos 
                              if v.get('width', 0) >= 1080 
                              and v.get('height', 0) >= 1920
-                             and abs(v.get('height', 0)/v.get('width', 1) - 16/9 < 0.1]
+                             and abs(v.get('height', 0)/v.get('width', 1) - 16/9) < 0.1]
 
         if not filtered_videos:
             logger.warning(f"No matching videos found for query: {query_string}")
             return None
 
         # Sort by duration
-        sorted_videos = sorted(filtered_videos, key=lambda x: abs(15-int(x.get('duration', 0)))
+        sorted_videos = sorted(filtered_videos, key=lambda x: abs(15-int(x.get('duration', 0))))
 
         # Find best video URL
         for video in sorted_videos:
@@ -74,6 +74,7 @@ def getBestVideo(query_string, orientation_landscape=True, used_vids=[]):
         logger.error(f"Error processing video search for {query_string}: {str(e)}")
         return None
 
+        
 def generate_video_url(timed_video_searches, video_server):
     timed_video_urls = []
     if video_server == "pexel":
