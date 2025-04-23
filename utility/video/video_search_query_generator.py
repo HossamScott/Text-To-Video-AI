@@ -7,7 +7,7 @@ from utility.retry_utils import retry_api_call, handle_common_errors
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_HOST  = os.getenv("OLLAMA_HOST",  "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:4b")
 
 PROMPTS = {
@@ -60,148 +60,153 @@ OUTPUT (JSON ONLY):""",
 }
 
 
-def extract_segments(text):
+def extract_segments(text: str):
+    """Try multiple strategies to parse JSON-like segment output."""
+    # 1) direct JSON
     try:
         parsed = json.loads(text)
         if isinstance(parsed, list):
             return parsed
-    except:
+    except Exception:
         pass
 
+    # 2) grab the first [...]] block
     json_pattern = r'\[(\[\[.*?\]\].*?\])\]'
     matches = re.findall(json_pattern, text, re.DOTALL)
     if matches:
         try:
             return json.loads(f"[{matches[0]}]")
-        except:
+        except Exception:
             pass
 
+    # 3) line-by-line regex
     segments = []
     pattern = re.compile(
         r'\[?\s*\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\]\s*,\s*\[\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\]\s*\]?'
     )
-    for match in pattern.finditer(text):
+    for m in pattern.finditer(text):
         try:
             segments.append([
-                [float(match.group(1)), float(match.group(2))],
-                [match.group(3), match.group(4), match.group(5)]
+                [float(m.group(1)), float(m.group(2))],
+                [m.group(3), m.group(4), m.group(5)]
             ])
-        except:
+        except Exception:
             continue
 
+    # 4) if still empty, ask the model to fix it
     if not segments:
         return self_correct_format(text)
-    
+
     return segments
 
 
-def self_correct_format(malformed_text):
-    correction_prompt = f"""Fix this malformed JSON into the correct format:
-    MALFORMED INPUT:
-    {malformed_text}
-    CORRECT FORMAT:
-    [[[start,end], ["kw1","kw2","kw3"]], ...]
-    OUTPUT ONLY THE CORRECTED JSON:"""
-    
+def self_correct_format(malformed: str):
+    """Use the LLM to re-format broken JSON into the strict array-of-segments format."""
+    prompt = f"""Fix this malformed JSON into the exact format:
+[[[start,end], ["kw1","kw2","kw3"]], ...]
+
+MALFORMED INPUT:
+{malformed}
+
+OUTPUT ONLY THE CORRECTED JSON ARRAY."""
     payload = {
-        "model": OLLAMA_MODEL,
-        "messages": [{"role": "user", "content": correction_prompt}],
-        "stream": False,
-        "format": "json"
+        "model":  OLLAMA_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream":   False,
+        "format":  "json"
     }
-    
     try:
-        response = requests.post(f"{OLLAMA_HOST}/api/chat", json=payload, timeout=600)
-        return json.loads(response.json()["message"]["content"])
+        resp = requests.post(f"{OLLAMA_HOST}/api/chat", json=payload, timeout=600)
+        resp.raise_for_status()
+        content = resp.json()["message"]["content"]
+        return json.loads(content)
     except Exception as e:
-        logger.error(f"Format correction failed: {str(e)}")
+        logger.error(f"Format correction failed: {e}")
         return []
 
 
-def normalize_segments(raw_data):
-    if isinstance(raw_data, str):
-        return extract_segments(raw_data)
-    
-    if isinstance(raw_data, dict):
-        for key in ["segments", "results", "data"]:
-            if key in raw_data:
-                return raw_data[key]
-        return [v for k, v in raw_data.items() if isinstance(v, list)]
-
-    return [
-        [item[:2], item[2:5]] if len(item) > 2 else item
-        for item in raw_data
-        if isinstance(item, (list, tuple))
-    ]
-
-
-def validate_segment(segment, index):
-    if not isinstance(segment, list) or len(segment) < 2:
-        raise ValueError(f"Invalid segment structure at index {index}")
-    
-    time_part = segment[0]
-    if not isinstance(time_part, (list, tuple)) or len(time_part) != 2:
-        time_part = [float(time_part[0]), float(time_part[1])] if isinstance(time_part, list) else [0, 0]
-    
-    keywords = segment[1] if len(segment) > 1 else []
-    if isinstance(keywords, str):
-        keywords = [kw.strip() for kw in keywords.split(",")[:3]]
-    elif isinstance(keywords, (list, tuple)):
-        keywords = [str(kw) for kw in keywords[:3]]
-    
-    return [time_part, keywords]
+def normalize_segments(raw):
+    """Turn dicts or mixed lists into a flat list of [ [start,end], [kw1,kw2,kw3] ]."""
+    if isinstance(raw, str):
+        return extract_segments(raw)
+    if isinstance(raw, dict):
+        for key in ("query_segments", "segments", "data", "results"):
+            if key in raw and isinstance(raw[key], list):
+                return raw[key]
+        # fallback: any list value
+        return [v for v in raw.values() if isinstance(v, list)]
+    if isinstance(raw, (list, tuple)):
+        normalized = []
+        for item in raw:
+            if isinstance(item, (list, tuple)) and len(item) >= 2:
+                time_part = item[0]
+                kw_part   = item[1]
+                normalized.append([time_part, kw_part])
+        return normalized
+    return []
 
 
-def preprocess_captions(captions_timed):
+def validate_segment(seg, idx):
+    """Ensure each segment is two floats + 3 keywords."""
+    if not (isinstance(seg, list) and len(seg) == 2):
+        raise ValueError(f"Segment {idx} not [time,kw]")
+    t, kws = seg
+    if not (isinstance(t, (list, tuple)) and len(t) == 2):
+        raise ValueError(f"Segment {idx} bad time: {t}")
+    if not (isinstance(kws, (list, tuple)) and len(kws) == 3):
+        raise ValueError(f"Segment {idx} needs 3 keywords: {kws}")
+    return [[float(t[0]), float(t[1])], [str(kws[0]), str(kws[1]), str(kws[2])]]
+
+
+def preprocess_captions(captions):
+    """Remove invalid entries, accept lists or tuples, normalize to lists."""
     cleaned = []
-    for cap in captions_timed:
-        if not cap or not isinstance(cap, list):
-            logger.warning(f"Skipping invalid caption (not list): {cap}")
+    for cap in captions:
+        if not isinstance(cap, (list, tuple)) or len(cap) != 2:
+            logger.warning(f"Skipping invalid caption (not list/tuple of len2): {cap}")
             continue
-        if len(cap) != 2:
-            logger.warning(f"Skipping invalid caption (not len 2): {cap}")
-            continue
-        if not isinstance(cap[0], (list, tuple)) or len(cap[0]) != 2:
+        time, text = cap
+        if not isinstance(time, (list, tuple)) or len(time) != 2:
             logger.warning(f"Skipping caption with bad timing: {cap}")
             continue
-        if not isinstance(cap[1], str) or not cap[1].strip():
+        start, end = time
+        if not all(isinstance(x, (int, float)) for x in (start, end)):
+            logger.warning(f"Skipping caption with non-numeric time: {cap}")
+            continue
+        if not isinstance(text, str) or not text.strip():
             logger.warning(f"Skipping caption with empty text: {cap}")
             continue
-        cleaned.append(cap)
+        cleaned.append([[float(start), float(end)], text.strip()])
     return cleaned
 
 
-def chunk_captions(captions, max_seconds=4):
+def chunk_captions(captions, max_seg=4.0):
+    """Group captions into chunks of ~max_seg seconds if initial call fails."""
     if not captions:
         return []
-    
-    chunks = []
-    current_chunk = []
-    start_time = captions[0][0][0]
+    chunks, cur, seg_start = [], [], captions[0][0][0]
     for cap in captions:
-        current_chunk.append(cap)
-        if cap[0][1] - start_time >= max_seconds:
-            chunks.append(current_chunk)
-            current_chunk = []
-            if cap[0][1] < captions[-1][0][1]:
-                start_time = cap[0][1]
-
-    if current_chunk:
-        chunks.append(current_chunk)
-
+        cur.append(cap)
+        if cap[0][1] - seg_start >= max_seg:
+            chunks.append(cur)
+            cur = []
+            seg_start = cap[0][1]
+    if cur:
+        chunks.append(cur)
     return chunks
 
 
 @handle_common_errors
 @retry_api_call(max_retries=3, initial_delay=2, backoff_factor=2)
-def call_AI_api(script, captions_timed, language="en"):
-    system_prompt = PROMPTS.get(language, PROMPTS["en"])
-    user_content = f"Script: {script}\nTimed Captions: {json.dumps(captions_timed)}"
+def call_AI_api(script, captions, language="en"):
+    """Core LLM call with full debug prints."""
+    sys_prompt = PROMPTS.get(language, PROMPTS["en"])
+    user_payload = f"Script: {script}\nTimed Captions: {json.dumps(captions)}"
     payload = {
-        "model": OLLAMA_MODEL,
+        "model":   OLLAMA_MODEL,
         "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content}
+            {"role": "system", "content": sys_prompt},
+            {"role":   "user", "content": user_payload}
         ],
         "stream": False,
         "format": "json"
@@ -210,81 +215,79 @@ def call_AI_api(script, captions_timed, language="en"):
     print("=== API REQUEST ===")
     print(json.dumps(payload, indent=2))
 
-    response = requests.post(f"{OLLAMA_HOST}/api/chat", json=payload, timeout=600)
-    response.raise_for_status()
-    result = response.json()
-    raw_content = result.get("message", {}).get("content", "")
-    logger.debug(f"Raw AI Response:\n{raw_content}")
+    resp = requests.post(f"{OLLAMA_HOST}/api/chat", json=payload, timeout=600)
+    resp.raise_for_status()
+    data = resp.json()
+    raw = data.get("message", {}).get("content", "")
+    logger.debug(f"Raw AI Response:\n{raw}")
 
-    parsed = extract_segments(raw_content)
-    logger.debug(f"Initial Parsing:\n{json.dumps(parsed, indent=2)}")
+    # parse → normalize → validate
+    parsed     = extract_segments(raw)
+    logger.debug(f"Parsed segments:\n{json.dumps(parsed, indent=2)}")
+    normalized = normalize_segments(parsed)
+    logger.debug(f"Normalized segments:\n{json.dumps(normalized, indent=2)}")
 
-    normalized = normalize_segments(parsed or raw_content)
-    logger.debug(f"Normalized Segments:\n{json.dumps(normalized, indent=2)}")
-
-    final_segments = []
-    for i, segment in enumerate(normalized):
+    final = []
+    for i, seg in enumerate(normalized):
         try:
-            final_segments.append(validate_segment(segment, i))
+            final.append(validate_segment(seg, i))
         except Exception as e:
-            logger.warning(f"Skipping invalid segment {i}: {str(e)}")
+            logger.warning(f"Skipping invalid segment {i}: {e}")
 
-    if not final_segments:
+    if not final:
         raise ValueError("No valid segments after validation")
 
-    return ensure_temporal_continuity(final_segments, captions_timed[-1][0][1])
+    return ensure_temporal_continuity(final, captions[-1][0][1])
 
 
-def ensure_temporal_continuity(segments, total_duration):
-    sorted_segments = sorted(segments, key=lambda x: x[0][0])
-    last_end = 0
-    for seg in sorted_segments:
-        if seg[0][0] > last_end:
-            sorted_segments.append([[last_end, seg[0][0]], ["general", "scene", "background"]])
-        last_end = max(last_end, seg[0][1])
-    if last_end < total_duration:
-        sorted_segments.append([[last_end, total_duration], ["ending", "scene", "background"]])
-    return sorted(sorted_segments, key=lambda x: x[0][0])
+def ensure_temporal_continuity(segs, total_dur):
+    """Fill gaps so you cover [0, total_dur] continuously."""
+    segs = sorted(segs, key=lambda x: x[0][0])
+    last_end = 0.0
+    filled = []
+    for s in segs:
+        if s[0][0] > last_end:
+            filled.append([[last_end, s[0][0]], ["general", "scene", "background"]])
+        filled.append(s)
+        last_end = max(last_end, s[0][1])
+    if last_end < total_dur:
+        filled.append([[last_end, total_dur], ["ending", "scene", "background"]])
+    return sorted(filled, key=lambda x: x[0][0])
 
 
-def getVideoSearchQueriesTimed(script, captions_timed, language="en"):
-    captions_timed = preprocess_captions(captions_timed)
-    if not captions_timed:
+def getVideoSearchQueriesTimed(script, captions, language="en"):
+    captions = preprocess_captions(captions)
+    if not captions:
         raise ValueError("Empty or invalid captions data")
 
     try:
-        segments = call_AI_api(script, captions_timed, language)
+        segments = call_AI_api(script, captions, language)
     except Exception as e:
-        logger.warning(f"Initial AI call failed: {str(e)}. Trying with chunked captions.")
+        logger.warning(f"Primary AI call failed: {e}. Trying chunked captions...")
         segments = []
-        for chunk in chunk_captions(captions_timed):
+        for chunk in chunk_captions(captions):
             try:
                 segments += call_AI_api(script, chunk, language)
             except Exception as sub_e:
-                logger.error(f"Chunked API call failed: {str(sub_e)}")
+                logger.error(f"Chunked call failed: {sub_e}")
 
-    end_time = captions_timed[-1][0][1]
+    end_time = captions[-1][0][1]
     if segments and segments[-1][0][1] < end_time:
-        logger.warning(f"Missing coverage: segments end at {segments[-1][0][1]}s / video ends at {end_time}s")
+        logger.warning(f"Coverage gap: last segment ends {segments[-1][0][1]}s, video ends {end_time}s")
 
     return ensure_temporal_continuity(segments, end_time)
 
 
 def merge_empty_intervals(segments):
-    merged = []
-    i = 0
+    merged, i = [], 0
     while i < len(segments):
         interval, url = segments[i]
         if url is None:
             j = i + 1
             while j < len(segments) and segments[j][1] is None:
                 j += 1
-            if i > 0:
-                prev_interval, prev_url = merged[-1]
-                if prev_url is not None and prev_interval[1] == interval[0]:
-                    merged[-1] = [[prev_interval[0], segments[j-1][0][1]], prev_url]
-                else:
-                    merged.append([interval, prev_url])
+            if merged and merged[-1][1] is not None and merged[-1][0][1] == interval[0]:
+                merged[-1] = [[merged[-1][0][0], segments[j-1][0][1]], merged[-1][1]]
             else:
                 merged.append([interval, None])
             i = j
