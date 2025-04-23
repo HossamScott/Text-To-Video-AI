@@ -255,28 +255,46 @@ def ensure_temporal_continuity(segs, total_dur):
     return sorted(filled, key=lambda x: x[0][0])
 
 
-def getVideoSearchQueriesTimed(script, captions, language="en"):
-    captions = preprocess_captions(captions)
-    if not captions:
+def getVideoSearchQueriesTimed(script, captions, language="en", model="gemma3:4b"):
+    if not captions or not isinstance(captions, list):
         raise ValueError("Empty or invalid captions data")
 
-    try:
-        segments = call_AI_api(script, captions, language)
-    except Exception as e:
-        logger.warning(f"Primary AI call failed: {e}. Trying chunked captions...")
-        segments = []
-        for chunk in chunk_captions(captions):
-            try:
-                segments += call_AI_api(script, chunk, language)
-            except Exception as sub_e:
-                logger.error(f"Chunked call failed: {sub_e}")
+    normalized_captions = preprocess_captions(captions)
+    if not normalized_captions:
+        raise ValueError("Empty or invalid captions data")
 
-    end_time = captions[-1][0][1]
-    if segments and segments[-1][0][1] < end_time:
-        logger.warning(f"Coverage gap: last segment ends {segments[-1][0][1]}s, video ends {end_time}s")
+    logger.info(f"Sending {len(normalized_captions)} valid captions to model...")
 
-    return ensure_temporal_continuity(segments, end_time)
+    system_prompt = PROMPTS.get(language, PROMPTS["en"])
+    user_prompt = f"Script: {script}\nTimed Captions: {json.dumps(normalized_captions)}"
 
+    response = run_with_retries(query_ollama_model, max_retries=3, delay=2, model=model, messages=[
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
+    ], format="json", stream=False)
+
+    if not response or not isinstance(response, list):
+        raise ValueError("Model response was empty or invalid")
+
+    valid_segments = []
+    for i, segment in enumerate(response):
+        if (
+            isinstance(segment, list)
+            and len(segment) == 2
+            and isinstance(segment[0], list)
+            and isinstance(segment[1], list)
+            and len(segment[0]) == 2
+            and all(isinstance(k, str) for k in segment[1])
+        ):
+            valid_segments.append(segment)
+        else:
+            logger.warning(f"Skipping invalid segment {i}: Segment {i} not [time,kw]")
+
+    if not valid_segments:
+        raise ValueError("No valid segments after validation")
+
+    total_duration = normalized_captions[-1][0][1]
+    return ensure_temporal_continuity(valid_segments, total_duration)
 
 def merge_empty_intervals(segments):
     merged, i = [], 0
