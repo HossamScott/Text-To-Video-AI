@@ -59,7 +59,6 @@ OUTPUT (JSON ONLY):""",
 الإخراج (JSON فقط):"""
 }
 
-
 def extract_segments(text: str):
     """Try multiple strategies to parse JSON-like segment output."""
     # 1) direct JSON
@@ -110,10 +109,10 @@ MALFORMED INPUT:
 
 OUTPUT ONLY THE CORRECTED JSON ARRAY."""
     payload = {
-        "model":  OLLAMA_MODEL,
+        "model": OLLAMA_MODEL,
         "messages": [{"role": "user", "content": prompt}],
-        "stream":   False,
-        "format":  "json"
+        "stream": False,
+        "format": "json"
     }
     try:
         resp = requests.post(f"{OLLAMA_HOST}/api/chat", json=payload, timeout=600)
@@ -133,21 +132,18 @@ def normalize_segments(raw):
         for key in ("query_segments", "segments", "data", "results"):
             if key in raw and isinstance(raw[key], list):
                 return raw[key]
-        # fallback: any list value
         return [v for v in raw.values() if isinstance(v, list)]
     if isinstance(raw, (list, tuple)):
         normalized = []
         for item in raw:
             if isinstance(item, (list, tuple)) and len(item) >= 2:
-                time_part = item[0]
-                kw_part   = item[1]
-                normalized.append([time_part, kw_part])
+                normalized.append([item[0], item[1]])
         return normalized
     return []
 
 
 def validate_segment(seg, idx):
-    """Ensure each segment is two floats + 3 keywords."""
+    """Ensure each segment is [ [start,end], [kw1,kw2,kw3] ]."""
     if not (isinstance(seg, list) and len(seg) == 2):
         raise ValueError(f"Segment {idx} not [time,kw]")
     t, kws = seg
@@ -159,11 +155,11 @@ def validate_segment(seg, idx):
 
 
 def preprocess_captions(captions):
-    """Remove invalid entries, accept lists or tuples, normalize to lists."""
+    """Normalize captions to [[start,end], text]."""
     cleaned = []
     for cap in captions:
         if not isinstance(cap, (list, tuple)) or len(cap) != 2:
-            logger.warning(f"Skipping invalid caption (not list/tuple of len2): {cap}")
+            logger.warning(f"Skipping invalid caption (not list/tuple len2): {cap}")
             continue
         time, text = cap
         if not isinstance(time, (list, tuple)) or len(time) != 2:
@@ -181,7 +177,7 @@ def preprocess_captions(captions):
 
 
 def chunk_captions(captions, max_seg=4.0):
-    """Group captions into chunks of ~max_seg seconds if initial call fails."""
+    """Group captions into ~max_seg-second chunks if initial call fails."""
     if not captions:
         return []
     chunks, cur, seg_start = [], [], captions[0][0][0]
@@ -199,7 +195,7 @@ def chunk_captions(captions, max_seg=4.0):
 @handle_common_errors
 @retry_api_call(max_retries=3, initial_delay=2, backoff_factor=2)
 def call_AI_api(script, captions, language="en"):
-    """Core LLM call with full debug prints."""
+    """Call the model, parse, normalize, validate, and fallback if needed."""
     sys_prompt = PROMPTS.get(language, PROMPTS["en"])
     user_payload = f"Script: {script}\nTimed Captions: {json.dumps(captions)}"
     payload = {
@@ -208,25 +204,34 @@ def call_AI_api(script, captions, language="en"):
             {"role": "system", "content": sys_prompt},
             {"role":   "user", "content": user_payload}
         ],
-        "stream": False,
+        "stream":  False,
         "format": "json"
     }
 
+    # 1) Show the request
     print("=== API REQUEST ===")
     print(json.dumps(payload, indent=2))
 
+    # 2) Call Ollama
     resp = requests.post(f"{OLLAMA_HOST}/api/chat", json=payload, timeout=600)
     resp.raise_for_status()
     data = resp.json()
+
+    # 3) Print the raw AI response
     raw = data.get("message", {}).get("content", "")
-    logger.debug(f"Raw AI Response:\n{raw}")
+    print("=== API RAW CONTENT ===")
+    print(raw)
 
-    # parse → normalize → validate
+    # 4) Parse → normalize
     parsed     = extract_segments(raw)
-    logger.debug(f"Parsed segments:\n{json.dumps(parsed, indent=2)}")
-    normalized = normalize_segments(parsed)
-    logger.debug(f"Normalized segments:\n{json.dumps(normalized, indent=2)}")
+    print("=== PARSED ===")
+    print(parsed)
 
+    normalized = normalize_segments(parsed)
+    print("=== NORMALIZED ===")
+    print(normalized)
+
+    # 5) Validate segments strictly
     final = []
     for i, seg in enumerate(normalized):
         try:
@@ -234,10 +239,17 @@ def call_AI_api(script, captions, language="en"):
         except Exception as e:
             logger.warning(f"Skipping invalid segment {i}: {e}")
 
+    # 6) Fallback: if none passed validation, use the normalized list as-is
     if not final:
-        raise ValueError("No valid segments after validation")
+        if normalized:
+            logger.warning("No valid segments after validation—falling back to normalized segments")
+            final = normalized
+        else:
+            raise ValueError("No valid segments after validation")
 
-    return ensure_temporal_continuity(final, captions[-1][0][1])
+    # 7) Ensure full coverage
+    total_dur = captions[-1][0][1]
+    return ensure_temporal_continuity(final, total_dur)
 
 
 def ensure_temporal_continuity(segs, total_dur):
@@ -254,41 +266,27 @@ def ensure_temporal_continuity(segs, total_dur):
         filled.append([[last_end, total_dur], ["ending", "scene", "background"]])
     return sorted(filled, key=lambda x: x[0][0])
 
-def getVideoSearchQueriesTimed(script, captions, language="en", model="gemma3:4b"):
-    if not captions or not isinstance(captions, list):
+
+def getVideoSearchQueriesTimed(script, captions, language="en"):
+    """Preprocess captions → call the API → return final segments."""
+    caps = preprocess_captions(captions)
+    if not caps:
         raise ValueError("Empty or invalid captions data")
 
-    normalized_captions = preprocess_captions(captions)
-    if not normalized_captions:
-        raise ValueError("Empty or invalid captions data")
+    try:
+        return call_AI_api(script, caps, language=language)
+    except Exception as e:
+        logger.warning(f"Primary call failed: {e}. Retrying with caption chunks...")
+        merged = []
+        for chunk in chunk_captions(caps):
+            try:
+                merged.extend(call_AI_api(script, chunk, language=language))
+            except Exception as sub_e:
+                logger.error(f"Chunk retry failed: {sub_e}")
+        if not merged:
+            raise
+        return merged
 
-    logger.info(f"Sending {len(normalized_captions)} valid captions to model...")
-
-    # This now handles errors + retries internally
-    response = call_AI_api(script, normalized_captions, language=language)
-
-    if not response or not isinstance(response, list):
-        raise ValueError("Model response was empty or invalid")
-
-    valid_segments = []
-    for i, segment in enumerate(response):
-        if (
-            isinstance(segment, list)
-            and len(segment) == 2
-            and isinstance(segment[0], list)
-            and isinstance(segment[1], list)
-            and len(segment[0]) == 2
-            and all(isinstance(k, str) for k in segment[1])
-        ):
-            valid_segments.append(segment)
-        else:
-            logger.warning(f"Skipping invalid segment {i}: Segment {i} not [time,kw]")
-
-    if not valid_segments:
-        raise ValueError("No valid segments after validation")
-
-    total_duration = normalized_captions[-1][0][1]
-    return ensure_temporal_continuity(valid_segments, total_duration)
 
 def merge_empty_intervals(segments):
     merged, i = [], 0
