@@ -254,7 +254,6 @@ def ensure_temporal_continuity(segs, total_dur):
         filled.append([[last_end, total_dur], ["ending", "scene", "background"]])
     return sorted(filled, key=lambda x: x[0][0])
 
-
 def getVideoSearchQueriesTimed(script, captions, language="en", model="gemma3:4b"):
     if not captions or not isinstance(captions, list):
         raise ValueError("Empty or invalid captions data")
@@ -265,13 +264,8 @@ def getVideoSearchQueriesTimed(script, captions, language="en", model="gemma3:4b
 
     logger.info(f"Sending {len(normalized_captions)} valid captions to model...")
 
-    system_prompt = PROMPTS.get(language, PROMPTS["en"])
-    user_prompt = f"Script: {script}\nTimed Captions: {json.dumps(normalized_captions)}"
-
-    response = run_with_retries(query_ollama_model, max_retries=3, delay=2, model=model, messages=[
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt}
-    ], format="json", stream=False)
+    # This now handles errors + retries internally
+    response = call_AI_api(script, normalized_captions, language=language)
 
     if not response or not isinstance(response, list):
         raise ValueError("Model response was empty or invalid")
