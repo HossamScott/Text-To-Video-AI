@@ -3,6 +3,7 @@ import uuid
 import threading
 from threading import Lock
 import time
+import os
 import logging
 import asyncio
 from utility.script.script_generator import generate_script
@@ -139,7 +140,11 @@ def generate_video_async(task_id, topic, language, voice, font_settings):
                 timed_captions=timed_captions,
                 background_video_data=background_video_urls,
                 video_server=VIDEO_SERVER,
-                font_settings=font_settings
+                font_size=font_settings['size'],
+                font_color=font_settings['color'],
+                font_family=font_settings['family'],
+                stroke_color=font_settings['stroke_color'],
+                stroke_width=font_settings['stroke_width']
             )
             
             with task_lock:
