@@ -140,11 +140,7 @@ def generate_video_async(task_id, topic, language, voice, font_settings):
                 timed_captions=timed_captions,
                 background_video_data=background_video_urls,
                 video_server=VIDEO_SERVER,
-                font_size=font_settings['size'],
-                font_color=font_settings['color'],
-                font_family=font_settings['family'],
-                stroke_color=font_settings['stroke_color'],
-                stroke_width=font_settings['stroke_width']
+                font_settings=font_settings
             )
             
             with task_lock:
