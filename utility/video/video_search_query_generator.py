@@ -11,28 +11,21 @@ OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:4b")
 
 PROMPTS = {
-    "en": """You are a video search query generator. For each time segment in the captions, generate exactly 3 visually concrete keywords for finding background videos.
+    "en": """You are a video search query generator. Generate exactly 3 visual keywords per time segment.
 
-STRICT OUTPUT FORMAT (JSON ONLY):
+STRICT RESPONSE FORMAT (JSON ONLY):
 [
-  [[start1, end1], ["keyword1", "keyword2", "keyword3"]],
-  [[start2, end2], ["keyword4", "keyword5", "keyword6"]]
+  [[start1, end1], ["kw1", "kw2", "kw3"]],
+  [[start2, end2], ["kw4", "kw5", "kw6"]]
 ]
 
 RULES:
-1. Keywords MUST be:
-   - Visually concrete (e.g., "futuristic city" not "future")
-   - In English only
-   - 1-3 words each
-   - Specific to the time segment
-2. Time segments MUST:
-   - Be consecutive
-   - Cover the entire video duration
-   - Each be 2-4 seconds
-3. OUTPUT MUST:
-   - Be pure JSON (no markdown, no explanations)
-   - Contain exactly 3 keywords per segment
-   - Maintain the exact specified format
+1. Time segments must cover the full duration consecutively
+2. Keywords must be visual and concrete
+3. Only return the JSON array, no other text
+
+BAD EXAMPLE: {"result": [...]}
+GOOD EXAMPLE: [[[0,2],["city","buildings"]], [[2,4],["park","trees"]]]
 
 INPUT:
 Script: {script}
@@ -70,59 +63,109 @@ OUTPUT (JSON ONLY):""",
 }
 
 
-def extract_json_from_text(text):
-    """Extract valid [[start, end], [kw1, kw2, kw3]] segments from possibly malformed JSON."""
+def extract_segments(text):
+    """Multi-stage extraction with AI fallback"""
+    # Attempt 1: Direct JSON parsing
     try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        segments = []
-        pattern = re.compile(
-            r'\[\[\s*(\d+\.?\d*),\s*(\d+\.?\d*)\s*\],\s*\[\s*"([^"]+)",\s*"([^"]+)",\s*"([^"]+)"\s*\]\]'
-        )
-        for match in pattern.finditer(text):
-            start, end = float(match.group(1)), float(match.group(2))
-            keywords = [match.group(3), match.group(4), match.group(5)]
-            segments.append([[start, end], keywords])
-        return segments if segments else None
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            return parsed
+    except:
+        pass
 
+    # Attempt 2: Find JSON-like patterns
+    json_pattern = r'\[(\[\[.*?\]\].*?\])\]'
+    matches = re.findall(json_pattern, text, re.DOTALL)
+    if matches:
+        try:
+            return json.loads(f"[{matches[0]}]")
+        except:
+            pass
 
-def normalize_response(content):
-    """Normalize different AI return structures into a list of segments."""
-    if isinstance(content, dict):
-        # Primary: look for "query_segments"
-        if "query_segments" in content and isinstance(content["query_segments"], list):
-            return content["query_segments"]
-        # Fallback: dict with JSON-string keys
-        segments = []
-        for k, v in content.items():
-            try:
-                time_range = json.loads(k)
-                if isinstance(time_range, list) and len(time_range) == 2 \
-                   and isinstance(v, list) and len(v) == 3:
-                    segments.append([time_range, v])
-            except Exception:
-                continue
-        return segments
-    return content
+    # Attempt 3: Line-by-line pattern matching
+    segments = []
+    pattern = re.compile(
+        r'\[?\s*\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\]\s*,\s*\[\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\]\s*\]?'
+    )
+    for match in pattern.finditer(text):
+        try:
+            segments.append([
+                [float(match.group(1)), float(match.group(2))],
+                [match.group(3), match.group(4), match.group(5)]
+            ])
+        except:
+            continue
 
+    # Final Attempt: Ask AI to fix formatting
+    if not segments:
+        return self_correct_format(text)
+    
+    return segments
+
+def self_correct_format(malformed_text):
+    """Use AI to fix malformed responses"""
+    correction_prompt = f"""Fix this malformed JSON into the correct format:
+    
+    MALFORMED INPUT:
+    {malformed_text}
+    
+    CORRECT FORMAT:
+    [[[start,end], ["kw1","kw2","kw3"]], ...]
+    
+    OUTPUT ONLY THE CORRECTED JSON:"""
+    
+    payload = {
+        "model": OLLAMA_MODEL,
+        "messages": [{"role": "user", "content": correction_prompt}],
+        "stream": False,
+        "format": "json"
+    }
+    
+    try:
+        response = requests.post(f"{OLLAMA_HOST}/api/chat", json=payload, timeout=600)
+        return json.loads(response.json()["message"]["content"])
+    except Exception as e:
+        logger.error(f"Format correction failed: {str(e)}")
+        return []
+
+def normalize_segments(raw_data):
+    """Normalize various response formats"""
+    # Handle string input
+    if isinstance(raw_data, str):
+        return extract_segments(raw_data)
+    
+    # Handle dictionary responses
+    if isinstance(raw_data, dict):
+        for key in ["segments", "results", "data"]:
+            if key in raw_data:
+                return raw_data[key]
+        return [v for k,v in raw_data.items() if isinstance(v, list)]
+    
+    # Handle list variants
+    return [
+        [item[:2], item[2:5]] if len(item) > 2 else item
+        for item in raw_data 
+        if isinstance(item, (list, tuple))
+    ]
 
 def validate_segment(segment, index):
-    """Ensure each segment is [ [start, end], [kw1,kw2,kw3] ] with correct types."""
-    if not (isinstance(segment, list) and len(segment) == 2):
-        raise ValueError(f"Segment {index} must be a list of two elements")
-    time_part, keywords = segment
-    if not (
-        isinstance(time_part, list)
-        and len(time_part) == 2
-        and all(isinstance(t, (int, float)) for t in time_part)
-    ):
-        raise ValueError(f"Segment {index} has invalid time range: {time_part}")
-    if not (
-        isinstance(keywords, list)
-        and len(keywords) == 3
-        and all(isinstance(k, str) for k in keywords)
-    ):
-        raise ValueError(f"Segment {index} has invalid keywords: {keywords}")
+    """Flexible validation with auto-correction"""
+    if not isinstance(segment, list) or len(segment) < 2:
+        raise ValueError(f"Invalid segment structure at index {index}")
+    
+    # Normalize time range
+    time_part = segment[0]
+    if not isinstance(time_part, (list, tuple)) or len(time_part) != 2:
+        time_part = [float(time_part[0]), float(time_part[1])] if isinstance(time_part, list) else [0, 0]
+    
+    # Normalize keywords
+    keywords = segment[1] if len(segment) > 1 else []
+    if isinstance(keywords, str):
+        keywords = [kw.strip() for kw in keywords.split(",")[:3]]
+    elif isinstance(keywords, (list, tuple)):
+        keywords = [str(kw) for kw in keywords[:3]]
+    
+    return [time_part, keywords]
 
 
 @handle_common_errors
@@ -148,43 +191,48 @@ def call_AI_api(script, captions_timed, language="en"):
     response.raise_for_status()
     result = response.json()
 
+        # Process response
     raw_content = result.get("message", {}).get("content", "")
-    clean_content = re.sub(r'```json|```', '', raw_content).strip()
-
-    print("=== API RAW CONTENT ===")
-    print(clean_content)
-
-    parsed = extract_json_from_text(clean_content) or {}
-    print("=== PARSED JSON OBJECT ===")
-    print(json.dumps(parsed, indent=2) if isinstance(parsed, (dict, list)) else parsed)
-
-    normalized = normalize_response(parsed)
-    print("=== NORMALIZED RESPONSE ===")
-    print(json.dumps(normalized, indent=2) if isinstance(normalized, list) else normalized)
-
-    if not isinstance(normalized, list) or not normalized:
-        raise ValueError("No valid segments found in response")
-
+    logger.debug(f"Raw AI Response:\n{raw_content}")
+    
+    # Multi-stage processing
+    parsed = extract_segments(raw_content)
+    logger.debug(f"Initial Parsing:\n{json.dumps(parsed, indent=2)}")
+    
+    normalized = normalize_segments(parsed or raw_content)
+    logger.debug(f"Normalized Segments:\n{json.dumps(normalized, indent=2)}")
+    
+    # Validate and correct each segment
+    final_segments = []
     for i, segment in enumerate(normalized):
-        validate_segment(segment, i)
+        try:
+            final_segments.append(validate_segment(segment, i))
+        except Exception as e:
+            logger.warning(f"Skipping invalid segment {i}: {str(e)}")
+    
+    if not final_segments:
+        raise ValueError("No valid segments after validation")
+    
+    # Ensure temporal continuity
+    return ensure_temporal_continuity(final_segments, captions_timed[-1][0][1])
 
-    return normalized
-
-
-def getVideoSearchQueriesTimed(script, captions_timed, language="en"):
-    """
-    Wrapper to call call_AI_api and ensure coverage of the entire video duration.
-    """
-    if not captions_timed:
-        raise ValueError("Empty captions data")
-
-    segments = call_AI_api(script, captions_timed, language)
-    end_time = captions_timed[-1][0][1]
-    last_end = segments[-1][0][1] if segments else 0
-    if last_end < end_time:
-        logger.warning(f"Missing coverage: segments end at {last_end}s / video ends at {end_time}s")
-
-    return segments
+def ensure_temporal_continuity(segments, total_duration):
+    """Fill gaps and ensure full coverage"""
+    # Sort by start time
+    sorted_segments = sorted(segments, key=lambda x: x[0][0])
+    
+    # Fill time gaps
+    last_end = 0
+    for seg in sorted_segments:
+        if seg[0][0] > last_end:
+            sorted_segments.append([[last_end, seg[0][0]], ["general", "scene", "background"]])
+        last_end = max(last_end, seg[0][1])
+    
+    # Extend last segment if needed
+    if last_end < total_duration:
+        sorted_segments.append([[last_end, total_duration], ["ending", "scene", "background"]])
+    
+    return sorted(sorted_segments, key=lambda x: x[0][0])
 
 
 def merge_empty_intervals(segments):
