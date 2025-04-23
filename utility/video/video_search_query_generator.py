@@ -234,6 +234,20 @@ def ensure_temporal_continuity(segments, total_duration):
     
     return sorted(sorted_segments, key=lambda x: x[0][0])
 
+def getVideoSearchQueriesTimed(script, captions_timed, language="en"):
+    """
+    Wrapper to call call_AI_api and ensure coverage of the entire video duration.
+    """
+    if not captions_timed:
+        raise ValueError("Empty captions data")
+
+    segments = call_AI_api(script, captions_timed, language)
+    end_time = captions_timed[-1][0][1]
+    last_end = segments[-1][0][1] if segments else 0
+    if last_end < end_time:
+        logger.warning(f"Missing coverage: segments end at {last_end}s / video ends at {end_time}s")
+
+    return segments
 
 def merge_empty_intervals(segments):
     """Merge consecutive empty intervals in the video segments"""
