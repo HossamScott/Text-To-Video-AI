@@ -153,10 +153,22 @@ def validate_segment(segment, index):
 
 
 def preprocess_captions(captions_timed):
-    return [
-        cap for cap in captions_timed
-        if cap and isinstance(cap, list) and len(cap) == 2 and all(cap[0]) and cap[1].strip()
-    ]
+    cleaned = []
+    for cap in captions_timed:
+        if not cap or not isinstance(cap, list):
+            logger.warning(f"Skipping invalid caption (not list): {cap}")
+            continue
+        if len(cap) != 2:
+            logger.warning(f"Skipping invalid caption (not len 2): {cap}")
+            continue
+        if not isinstance(cap[0], (list, tuple)) or len(cap[0]) != 2:
+            logger.warning(f"Skipping caption with bad timing: {cap}")
+            continue
+        if not isinstance(cap[1], str) or not cap[1].strip():
+            logger.warning(f"Skipping caption with empty text: {cap}")
+            continue
+        cleaned.append(cap)
+    return cleaned
 
 
 def chunk_captions(captions, max_seconds=4):
