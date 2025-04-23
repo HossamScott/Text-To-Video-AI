@@ -17,12 +17,20 @@ STRICT RESPONSE FORMAT (JSON ONLY):
   [[start1, end1], ["kw1", "kw2", "kw3"]],
   [[start2, end2], ["kw4", "kw5", "kw6"]]
 ]
-RULES:
-1. Time segments must cover the full duration consecutively
-2. Keywords must be visual and concrete
-3. Only return the JSON array, no other text
-BAD EXAMPLE: {"result": [...]}
-GOOD EXAMPLE: [[[0,2],["city","buildings"]], [[2,4],["park","trees"]]]
+CRITICAL RULES:
+1. Times must be NUMBERS (e.g., 0.0 not "0.0")
+2. EXACT structure: [[[number,number],["word","word","word"]]
+3. No duplicate keys or nested objects
+4. Keywords must be English visual concepts
+
+BAD EXAMPLES TO AVOID:
+{"segments": [...]}  # Object wrapper
+[["0.0", "1.0"], ["kw1","kw2","kw3"]]  # String times
+[[[0,2],["city"]], ...]  # Only 1 keyword
+
+GOOD EXAMPLE:
+[[[0,2],["city","buildings","skyline"]], [[2,4],["park","trees","path"]]]
+
 INPUT:
 Script: {script}
 Timed Captions: {captions}
@@ -60,42 +68,37 @@ OUTPUT (JSON ONLY):""",
 }
 
 def extract_segments(text: str):
-    """Try multiple strategies to parse JSON-like segment output."""
-    # 1) direct JSON
+    """More robust parsing with numeric conversion"""
+    # FIX: Improved regex for malformed JSON
+    json_pattern = r'(?s)\[(?:\[\[[^]]+\]\])(?:,\s*\[\[[^]]+\]\])*\]'
+    
+    # Attempt direct JSON parse first
     try:
         parsed = json.loads(text)
         if isinstance(parsed, list):
             return parsed
     except Exception:
         pass
-
-    # 2) grab the first [...]] block
-    json_pattern = r'\[(\[\[.*?\]\].*?\])\]'
-    matches = re.findall(json_pattern, text, re.DOTALL)
-    if matches:
-        try:
-            return json.loads(f"[{matches[0]}]")
-        except Exception:
-            pass
-
-    # 3) line-by-line regex
+    
+    # FIX: New strategy - find all [[time,time], [kw,kw,kw]] patterns
     segments = []
     pattern = re.compile(
-        r'\[?\s*\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\]\s*,\s*\[\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\]\s*\]?'
+        r'\[?\s*\[\s*(\d+\.?\d*)\s*,\s*(\d+\.?\d*)\s*\]\s*,\s*\[\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\]\s*\]?',
+        re.DOTALL
     )
-    for m in pattern.finditer(text):
+    for match in pattern.finditer(text):
         try:
-            segments.append([
-                [float(m.group(1)), float(m.group(2))],
-                [m.group(3), m.group(4), m.group(5)]
-            ])
+            start = float(match.group(1))
+            end = float(match.group(2))
+            kws = [match.group(3), match.group(4), match.group(5)]
+            segments.append([[start, end], kws])
         except Exception:
             continue
-
-    # 4) if still empty, ask the model to fix it
+    
+    # FIX: Fallback to self-correction only if no segments found
     if not segments:
         return self_correct_format(text)
-
+    
     return segments
 
 
@@ -125,33 +128,51 @@ OUTPUT ONLY THE CORRECTED JSON ARRAY."""
 
 
 def normalize_segments(raw):
-    """Turn dicts or mixed lists into a flat list of [ [start,end], [kw1,kw2,kw3] ]."""
-    if isinstance(raw, str):
-        return extract_segments(raw)
+    """Handle more varied structures"""
+    # FIX: Added support for {'segments': [...]} and similar
     if isinstance(raw, dict):
-        for key in ("query_segments", "segments", "data", "results"):
-            if key in raw and isinstance(raw[key], list):
+        candidates = ['segments', 'results', 'data']
+        for key in candidates:
+            if isinstance(raw.get(key), list):
                 return raw[key]
         return [v for v in raw.values() if isinstance(v, list)]
-    if isinstance(raw, (list, tuple)):
-        normalized = []
-        for item in raw:
-            if isinstance(item, (list, tuple)) and len(item) >= 2:
-                normalized.append([item[0], item[1]])
-        return normalized
-    return []
+    
+    # Handle list of mixed types
+    normalized = []
+    for item in raw:
+        if isinstance(item, (list, tuple)) and len(item) >= 2:
+            normalized.append([item[0], item[1]])
+        elif isinstance(item, dict):
+            normalized.append([item.get('time'), item.get('keywords')])
+    
+    return normalized
 
 
 def validate_segment(seg, idx):
-    """Ensure each segment is [ [start,end], [kw1,kw2,kw3] ]."""
-    if not (isinstance(seg, list) and len(seg) == 2):
-        raise ValueError(f"Segment {idx} not [time,kw]")
-    t, kws = seg
-    if not (isinstance(t, (list, tuple)) and len(t) == 2):
-        raise ValueError(f"Segment {idx} bad time: {t}")
-    if not (isinstance(kws, (list, tuple)) and len(kws) == 3):
-        raise ValueError(f"Segment {idx} needs 3 keywords: {kws}")
-    return [[float(t[0]), float(t[1])], [str(kws[0]), str(kws[1]), str(kws[2])]]
+    """More lenient validation with type conversion"""
+    # FIX: Allow flexible structure as long as we can extract times/keywords
+    try:
+        # Handle different structures
+        if isinstance(seg, dict):  # Convert {"start":0, "end":1, "keywords":[...]} 
+            t = [seg.get('start', 0), seg.get('end', 0)]
+            kws = seg.get('keywords', [])
+        else:
+            t = seg[0] if len(seg) > 0 else [0, 0]
+            kws = seg[1] if len(seg) > 1 else []
+        
+        # Convert to floats and strings
+        start = float(t[0]) if len(t) > 0 else 0.0
+        end = float(t[1]) if len(t) > 1 else 0.0
+        kws = [str(k).strip() for k in kws][:3]  # Take first 3
+        
+        # Pad keywords if less than 3
+        while len(kws) < 3:
+            kws.append("general")
+            
+        return [[start, end], kws]
+    except Exception as e:
+        logger.warning(f"Segment {idx} partial validation: {e}")
+        return [[0.0, 0.0], ["general", "scene", "background"]]
 
 
 def preprocess_captions(captions):
@@ -253,19 +274,38 @@ def call_AI_api(script, captions, language="en"):
 
 
 def ensure_temporal_continuity(segs, total_dur):
-    """Fill gaps so you cover [0, total_dur] continuously."""
-    segs = sorted(segs, key=lambda x: x[0][0])
+    """Type-safe continuity check"""
+    # FIX: Convert all times to floats first
+    converted = []
+    for seg in segs:
+        try:
+            start = float(seg[0][0])
+            end = float(seg[0][1])
+            converted.append([[start, end], seg[1]])
+        except Exception:
+            continue
+    
+    # Sort by start time after conversion
+    sorted_segs = sorted(converted, key=lambda x: x[0][0])
+    
+    # Fill gaps with type-safe comparisons
     last_end = 0.0
     filled = []
-    for s in segs:
-        if s[0][0] > last_end:
-            filled.append([[last_end, s[0][0]], ["general", "scene", "background"]])
+    for s in sorted_segs:
+        start = float(s[0][0])
+        end = float(s[0][1])
+        
+        if start > last_end:
+            filled.append([[last_end, start], ["general", "scene", "background"]])
+        
         filled.append(s)
-        last_end = max(last_end, s[0][1])
-    if last_end < total_dur:
-        filled.append([[last_end, total_dur], ["ending", "scene", "background"]])
-    return sorted(filled, key=lambda x: x[0][0])
-
+        last_end = max(last_end, end)
+    
+    # Handle final gap
+    if last_end < float(total_dur):
+        filled.append([[last_end, float(total_dur)], ["ending", "scene", "background"]])
+    
+    return filled
 
 def getVideoSearchQueriesTimed(script, captions, language="en"):
     """Preprocess captions → call the API → return final segments."""
