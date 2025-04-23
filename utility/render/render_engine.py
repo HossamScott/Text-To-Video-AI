@@ -43,7 +43,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Proper API key handling with environment variable
-PEXELS_API_KEY = os.environ.get('PEXELS_KEY')
+PEXELS_API_KEY = os.environ.get('PEXELS_KEY', "aXA4IlmjYKdzM9R7JZX6l4SwVmxTsaJbMvp9l7jf7rE9VVbh5lbxvoKn")
 if not PEXELS_API_KEY:
     logger.error("PEXELS_KEY environment variable not set!")
     raise ValueError("Missing PEXELS_KEY in environment variables")
