@@ -38,16 +38,18 @@ curl -X POST -H "Content-Type: application/json" \
 }' \
 https://techs-solutions.com/generate 
 
+export PEXELS_KEY="aXA4IlmjYKdzM9R7JZX6l4SwVmxTsaJbMvp9l7jf7rE9VVbh5lbxvoKn"
+
 curl -X POST -H "Content-Type: application/json" \
 -d '{
     "topic": "humans living on another planet with advanced cities",
     "language": "en",
     "voice": "en-US-JennyNeural",
-    "font_size": 100,
-    "font_color": "white",
+    "font_size": 150,
+    "font_color": "green",
     "font_family": "Arial",
-    "font_stroke_color": "black", 
-    "font_stroke_width": 2
+    "font_stroke_color": "red", 
+    "font_stroke_width": 5
 }' \
 http://localhost:5050/generate 
 
