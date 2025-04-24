@@ -7,7 +7,7 @@ from utility.retry_utils import retry_api_call, handle_common_errors
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_HOST  = os.getenv("OLLAMA_HOST",  "http://172.17.0.1:11434")
+OLLAMA_HOST  = os.getenv("OLLAMA_HOST",  "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:12b")
 
 PROMPTS = {
