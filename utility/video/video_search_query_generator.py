@@ -274,8 +274,11 @@ def call_AI_api(script, captions, language="en"):
 
 
 def ensure_temporal_continuity(segs, total_dur):
-    """Type-safe continuity check"""
-    # FIX: Convert all times to floats first
+    """Ensure full video coverage with minimum segment duration"""
+    if not segs:
+        return [[[0.0, total_dur], ["general", "scene", "background"]]]
+
+    # Convert all times to floats and sort
     converted = []
     for seg in segs:
         try:
@@ -284,27 +287,28 @@ def ensure_temporal_continuity(segs, total_dur):
             converted.append([[start, end], seg[1]])
         except Exception:
             continue
-    
-    # Sort by start time after conversion
+
+    # Sort by start time
     sorted_segs = sorted(converted, key=lambda x: x[0][0])
-    
-    # Fill gaps with type-safe comparisons
+
+    # Fill gaps and ensure minimum duration
     last_end = 0.0
     filled = []
-    for s in sorted_segs:
-        start = float(s[0][0])
-        end = float(s[0][1])
-        
+    for seg in sorted_segs:
+        start, end = seg[0]
         if start > last_end:
-            filled.append([[last_end, start], ["general", "scene", "background"]])
-        
-        filled.append(s)
+            filled.append([[last_end, start], ["transition", "scene", "background"]])
+        if end - start < 2.0:  # Ensure minimum 2-second segments
+            end = start + 2.0
+        filled.append(seg)
         last_end = max(last_end, end)
-    
+
     # Handle final gap
-    if last_end < float(total_dur):
-        filled.append([[last_end, float(total_dur)], ["ending", "scene", "background"]])
-    
+    if last_end < total_dur - 2:
+        filled.append([[last_end, total_dur], ["conclusion", "summary", "ending"]])
+    elif last_end < total_dur:
+        filled[-1][0][1] = total_dur
+
     return filled
 
 def getVideoSearchQueriesTimed(script, captions, language="en"):

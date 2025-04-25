@@ -24,9 +24,9 @@ docker stop $(docker ps -aq --filter "ancestor=video-generator") && docker rm -f
 docker build --no-cache -t video-generator .
 
 
-docker run -d -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output -e OLLAMA_HOST="http://172.17.0.1:11434" --name video-generator video-generator
+docker run --network="host" -d -p 5050:5050 -v /tmp:/tmp -v /T-T-V-AI/videos:/app/output -e OLLAMA_HOST="http://localhost:11434" --name video-generator video-generator
 
-docker run -p 5050:5050 -v /tmp:/tmp -v /home/administrator/Text-To-Video-AI/videos:/app/output -e OLLAMA_HOST="http://172.17.0.1:11434" --name video-generator video-generator
+docker run --network="host" -p 5050:5050 -v /tmp:/tmp -v /T-T-V-AI/videos/videos:/app/output -e OLLAMA_HOST="http://localhost:11434" --name video-generator video-generator
 
 curl -X POST -H "Content-Type: application/json" \
 -d '{
@@ -42,19 +42,19 @@ export PEXELS_KEY="aXA4IlmjYKdzM9R7JZX6l4SwVmxTsaJbMvp9l7jf7rE9VVbh5lbxvoKn"
 
 curl -X POST -H "Content-Type: application/json" \
 -d '{
-    "topic": "humans living on another planet with advanced cities",
+    "topic": "explain why gym is good for health",
     "language": "en",
     "voice": "en-US-JennyNeural",
-    "font_size": 150,
-    "font_color": "green",
+    "font_size": 100,
+    "font_color": "white",
     "font_family": "Arial",
-    "font_stroke_color": "red", 
-    "font_stroke_width": 5
+    "font_stroke_color": "black", 
+    "font_stroke_width": 3
 }' \
 http://localhost:5050/generate 
 
 {"task_id":"53e8bd38-4a8d-4e3e-bfb0-c08eab839e7a"}
-curl http://localhost:5050/status/cf4c5dac-f03f-46ca-bb4f-66154dc6e644
+curl http://localhost:5050/status/a260360f-4f1d-4c8e-8cbe-05cedce0ae35
 curl http://localhost:5050/tasks
 curl -X POST http://localhost:5050/tasks/{task_id}/cancel
 

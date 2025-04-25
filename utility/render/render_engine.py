@@ -161,7 +161,7 @@ def get_output_media(
     timed_captions,
     background_video_data,
     video_server,
-    font_settings=None
+    font_settings=None  # Accept single font_settings parameter
 ):
     output_dir = "/app/output"
     os.makedirs(output_dir, exist_ok=True)
@@ -177,7 +177,8 @@ def get_output_media(
         }
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_file = os.path.join(output_dir, f"video_{timestamp}.mp4")
+    rand_suffix = f"{random.randint(1,99):02d}"  # Pad to 2 digits
+    output_file = os.path.join(output_dir, f"video_{timestamp}_{rand_suffix}.mp4")
 
     # Configure ImageMagick
     magick_path = get_program_path("magick") or '/usr/bin/convert'
@@ -238,4 +239,5 @@ def get_output_media(
     if os.path.exists(audio_file_path):
         os.remove(audio_file_path)
 
-    return output_file
+    # return output_file
+    return os.path.basename(output_file)

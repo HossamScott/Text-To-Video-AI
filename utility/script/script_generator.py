@@ -30,21 +30,16 @@ _, model = get_ai_client()
 def generate_script(topic, language="en"):
     # English prompt
     en_prompt = """
-        You are a seasoned content writer for a YouTube Shorts channel, specializing in facts videos. 
-        Your facts shorts are concise, each lasting less than 50 seconds (approximately 140 words). 
-        They are incredibly engaging and original. When a user requests a specific type of facts short, you will create it.
-
-        For instance, if the user asks for:
-        Weird facts
-        You would produce content like this:
-
-        Weird facts you don't know:
-        - Bananas are berries, but strawberries aren't.
-        - A single cloud can weigh over a million pounds.
-        - There's a species of jellyfish that is biologically immortal.
-        - Honey never spoils; archaeologists have found pots of honey in ancient Egyptian tombs that are over 3,000 years old and still edible.
-        - The shortest war in history was between Britain and Zanzibar on August 27, 1896. Zanzibar surrendered after 38 minutes.
-        - Octopuses have three hearts and blue blood.
+        You're a professional storyteller creating engaging short videos. 
+        Create a cohesive narrative with:
+        1. Introduction hook (10% of content)
+        2. 3-5 connected story points (80%)
+        3. Memorable conclusion (10%)
+        Maintain:
+        - Natural flow between facts
+        - Conversational tone
+        - Cause/effect relationships
+        - Time transitions ("Meanwhile", "Later", etc.)
 
         You are now tasked with creating the best short script based on the user's requested type of 'facts'.
 
