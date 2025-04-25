@@ -119,10 +119,10 @@ def generate_video_async(task_id, topic, language, voice, font_settings):
         update_task_progress(task_id, 50, 'Captions created')
         
         # Step 4: Generate video search terms (20% weight)
-        update_task_progress(task_id, 50, 'Captions created. Generating video search terms...')
+        update_task_progress(task_id, 50, 'Captions created. Generating video terms...')
         check_cancellation()
         search_terms = getVideoSearchQueriesTimed(response, timed_captions, language)
-        update_task_progress(task_id, 70, 'Search terms generated')
+        update_task_progress(task_id, 70, 'Video terms generated')
         
         # Step 5: Search for background videos (15% weight)
         update_task_progress(task_id, 70, 'Searching for background videos...')
