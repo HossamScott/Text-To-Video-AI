@@ -29,8 +29,8 @@ _, model = get_ai_client()
 @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2)
 def generate_script(topic, language="en"):
     # English prompt
-    en_prompt = 
-        """You are a seasoned content writer for a YouTube Shorts channel, specializing in facts videos. 
+    en_prompt = """
+        You are a seasoned content writer for a YouTube Shorts channel, specializing in facts videos. 
         Your facts shorts are concise, each lasting less than 50 seconds (approximately 140 words). 
         They are incredibly engaging and original. When a user requests a specific type of facts short, you will create it.
 
@@ -50,9 +50,8 @@ def generate_script(topic, language="en"):
 
         Keep it brief, highly interesting, and unique.
 
-        Stictly output the script in a JSON format like below, and only provide a parsable JSON object with the key 'script'.
+        Strictly output the script in a JSON format like below, and only provide a parsable JSON object with the key 'script'.
 
-        # Output
         {"script": "Here is the script ..."}
         """
 
