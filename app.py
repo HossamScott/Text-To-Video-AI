@@ -188,7 +188,7 @@ def generate_video():
     
     # Font settings with defaults
     font_settings = {
-        'size': data.get('font_size', 100),
+        'size': data.get('font_size', 100) * 0.75,
         'color': data.get('font_color', 'white'),
         'stroke_color': data.get('font_stroke_color', 'black'),
         'stroke_width': data.get('font_stroke_width', 3),
