@@ -38,7 +38,7 @@ curl -X POST -H "Content-Type: application/json" \
 }' \
 https://techs-solutions.com/generate 
 
-export PEXELS_KEY="aXA4IlmjYKdzM9R7JZX6l4SwVmxTsaJbMvp9l7jf7rE9VVbh5lbxvoKn"
+
 
 curl -X POST -H "Content-Type: application/json" \
 -d '{
@@ -58,78 +58,3 @@ curl http://localhost:5050/status/a260360f-4f1d-4c8e-8cbe-05cedce0ae35
 curl http://localhost:5050/tasks
 curl -X POST http://localhost:5050/tasks/{task_id}/cancel
 
-
-
-
-
-docker run -p 5050:5050 \
-  --add-host=host.docker.internal:host-gateway \
-  -v /tmp:/tmp \
-  -v /home/administrator/Text-To-Video-AI/videos:/app/output \
-  -e OLLAMA_HOST="http://host.docker.internal:11434" \
-  --name video-generator \
-  video-generator
-
-
-
-
-------------------------------------------------IMAGES
-sudo lsof -i :5060
-sudo kill -9 $(sudo lsof -t -i:5060)
-nohup python3 generate_image_imakeapp.py > flask.log 2>&1 &
-
-curl --location 'https://techs-solutions.com/generate' \
---header 'Content-Type: application/json' \
---data '
-
-{
-    "prompt": "a beautiful landscape on earth",
-    "api_key": "FPSX65796b2546e449fdbded97a437554ecf",
-    "aspect_ratio": "square_1_1",
-    "effects": {
-        "color": "goldglow",
-        "framing": "portrait",
-        "lightning": "iridescent"
-    },
-    "colors": [
-        {
-            "color": "#EFBF04",
-            "weight": 0.5
-        }
-    ],
-    "seed": 1235
-}'
-
-
-
-and code for : 
-Video Generation Improvements:
-
-Add support for more video servers (Pixabay, Unsplash, etc.)
-
-Implement local video caching to reduce API calls
-
-Add transitions between video clips + UI/UX Enhancements:
-
-Add a simple web interface to monitor progress
-
-Support video preview before final render
-
-Allow parameter tuning during generation + Performance Optimizations:
-
-Implement background task queue (Celery/RQ)
-
-Add video generation batching
-
-
-Security Improvements:
-
-Remove hardcoded API keys
-
-Add rate limiting
-
-Implement request validation + Monitoring:
-
-Add Prometheus metrics
-
-Log generation statistics

@@ -146,7 +146,7 @@ def generate_video_async(task_id, topic, language, voice, font_settings):
             with task_lock:
                 tasks[task_id]['status'] = 'completed'
                 tasks[task_id]['progress'] = 100
-                tasks[task_id]['result'] = {'video_path': f'/videos/{video_filename}'}
+                tasks[task_id]['result'] = {'video_path': f'/videos/{video_path}'}
                 tasks[task_id]['message'] = 'Video generation complete'
                 tasks[task_id]['updated_at'] = time.time()
         else:
